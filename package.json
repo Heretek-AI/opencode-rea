@@ -1,0 +1,33 @@
+{
+  "$schema": "https://json.schemastore.org/package.json",
+  "name": "opencode-rea",
+  "version": "0.1.0",
+  "description": "opencode-rea plugin",
+  "type": "module",
+  "license": "MIT",
+  "exports": {
+    ".": "./dist/index.js"
+  },
+  "files": [
+    "dist",
+    "skills",
+    "agents"
+  ],
+  "scripts": {
+    "check": "tsc --noEmit -p tsconfig.json",
+    "build": "tsc -p tsconfig.build.json",
+    "test": "bun test test/unit",
+    "test:unit": "bun test test/unit"
+  },
+  "peerDependencies": {
+    "@opencode/plugin": "^2"
+  },
+  "devDependencies": {
+    "@opencode/cli": "2.0.26",
+    "@opencode/plugin": "2.0.26",
+    "@opencode/sdk": "2.0.26",
+    "@types/bun": "1.3.4",
+    "rea-agents": "6.4.0",
+    "typescript": "5.9.2"
+  }
+}
