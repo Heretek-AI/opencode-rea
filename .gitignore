@@ -4,5 +4,7 @@ review/
 node_modules/
 # Build output
 dist/
+# E2E failure artifacts (collected by CI uploads)
+test-results/
 # Git worktrees for ticket isolation
 .worktrees/

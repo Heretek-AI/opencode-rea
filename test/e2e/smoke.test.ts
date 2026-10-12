@@ -1,6 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { start, titleAware } from "../support/model-fixture.js"
-import { mkIsolatedEnv, runOpencodeRun, writeOpencodeJson } from "../support/opencode-env.js"
+import { dumpFailureArtifacts } from "../support/artifacts.js"
+import { mkIsolatedEnv, runOpencodeRun, writeOpencodeJson, type RunResult } from "../support/opencode-env.js"
 
 const LIVE_NOTE = "live-model behaviour unverified"
 
@@ -12,6 +13,7 @@ describe("T02 E2E smoke: built plugin loads in real CLI", () => {
     expect(dist).toBe(true)
     const fixture = await start({ responses: [titleAware([{ type: "text", text: "SMOKE-READY" }])] })
     const env = await mkIsolatedEnv()
+    let lastRun: RunResult | undefined
     try {
       await writeOpencodeJson(env, {
         model: "fixture-test/fixture-model",
@@ -25,6 +27,7 @@ describe("T02 E2E smoke: built plugin loads in real CLI", () => {
         },
       })
       const res = await runOpencodeRun(env, ["run", "--standalone", "--format", "json", "--auto", "--print-logs", "--model", "fixture-test/fixture-model", "Say SMOKE-READY."], { timeoutMs: 90_000 })
+      lastRun = res
       console.log(`[${LIVE_NOTE}] smoke exit:`, res.exitCode)
       expect(res.exitCode).toBe(0)
       expect(res.stdout).toContain("SMOKE-READY")
@@ -34,6 +37,13 @@ describe("T02 E2E smoke: built plugin loads in real CLI", () => {
       expect(res.stderr).not.toContain("LoadError")
       expect(res.stderr).not.toContain("Plugin must export")
     } finally {
+      // Persist fixture request logs + CLI output under test-results/ so the
+      // CI failure-artifact uploads have real files to collect.
+      await dumpFailureArtifacts({
+        label: "smoke",
+        fixture,
+        runs: lastRun ? [{ name: "opencode-run", result: lastRun }] : [],
+      }).catch(() => {})
       await env.cleanup()
       await fixture.close()
     }
