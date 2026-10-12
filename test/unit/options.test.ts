@@ -78,13 +78,18 @@ describe("T04 options boundary: parseOptions", () => {
 describe("T04 options boundary: setup wiring", () => {
   test("setup validates ctx.options: bad options throw, defaults pass", async () => {
     // Plugin.define preserves setup, so invoke it directly with a fake ctx.
+    // Setup also registers skills (T05), so stub skill.transform as a no-op.
     const setup = (plugin as unknown as { setup: (ctx: unknown) => Promise<unknown> }).setup
     expect(typeof setup).toBe("function")
-    await setup({ options: undefined })
-    await setup({ options: {} })
+    const withSkill = (options: unknown) => ({
+      options,
+      skill: { transform: async () => ({ dispose: async () => {} }) },
+    })
+    await setup(withSkill(undefined))
+    await setup(withSkill({}))
     let error: unknown
     try {
-      await setup({ options: { bogus: true } })
+      await setup(withSkill({ bogus: true }))
     } catch (e) {
       error = e
     }
