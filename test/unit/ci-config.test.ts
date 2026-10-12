@@ -96,12 +96,12 @@ describe("T03 CI skeleton (.github/workflows/ci.yml)", () => {
     ).toBe(true)
   })
 
-  test("test jobs target test/ explicitly (unit, integration, e2e)", async () => {
+  test("test jobs target test/ explicitly with review/ excluded (unit, integration, e2e)", async () => {
     const { yaml } = await loadWorkflow()
     const expected: Record<string, string> = {
-      unit: "bun test test/unit",
-      integration: "bun test test/integration",
-      e2e: "bun test test/e2e",
+      unit: "bun test --path-ignore-patterns 'review/**' test/unit",
+      integration: "bun test --path-ignore-patterns 'review/**' test/integration",
+      e2e: "bun test --path-ignore-patterns 'review/**' test/e2e",
     }
     for (const [id, cmd] of Object.entries(expected)) {
       const runs = allRuns(yaml.jobs?.[id] as WorkflowJob)
@@ -111,10 +111,28 @@ describe("T03 CI skeleton (.github/workflows/ci.yml)", () => {
 
   test("no job runs a bare bun test", async () => {
     const { text } = await loadWorkflow()
-    const occurrences = [...text.matchAll(/bun test[^\n"']*/g)].map((m) => m[0])
+    const occurrences = [...text.matchAll(/bun test[^\n]*/g)].map((m) => m[0])
     expect(occurrences.length).toBeGreaterThan(0)
     for (const occurrence of occurrences) {
-      expect(occurrence).toMatch(/bun test\s+test\/(unit|integration|e2e)/)
+      expect(occurrence).toMatch(/bun test\s+--path-ignore-patterns 'review\/\*\*'\s+test\/(unit|integration|e2e)/)
+      expect(occurrence).toContain("--path-ignore-patterns")
+      expect(occurrence).toContain("review/**")
     }
+  })
+
+  test("package.json scripts exclude review/ via --path-ignore-patterns", async () => {
+    const pkgPath = join(import.meta.dir, "../../package.json")
+    const pkg = JSON.parse(await Bun.file(pkgPath).text()) as {
+      scripts?: Record<string, string>
+    }
+    const scripts = pkg.scripts ?? {}
+    for (const name of ["test", "test:unit", "test:integration", "test:e2e"]) {
+      expect(scripts[name]).toBeDefined()
+      expect(String(scripts[name])).toContain("--path-ignore-patterns 'review/**'")
+    }
+    expect(String(scripts["test"])).toContain("test/unit")
+    expect(String(scripts["test:unit"])).toContain("test/unit")
+    expect(String(scripts["test:integration"])).toContain("test/integration")
+    expect(String(scripts["test:e2e"])).toContain("test/e2e")
   })
 })

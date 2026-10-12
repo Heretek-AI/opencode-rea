@@ -5,17 +5,24 @@
 - Install (worktree only): `bun install`
 - Typecheck: `bun run check` (`tsc --noEmit -p tsconfig.json`)
 - Build: `bun run build` (`tsc -p tsconfig.build.json`, emits `dist/index.js`)
-- Tests (always target `test/` explicitly):
-  - All unit: `bun test test/unit`
-  - Single file: `bun test test/unit/scaffold.test.ts`
+- Tests (always target `test/` explicitly AND exclude `review/`):
+  - All unit: `bun test --path-ignore-patterns 'review/**' test/unit`
+  - Single file: `bun test --path-ignore-patterns 'review/**' test/unit/scaffold.test.ts`
+  - Integration: `bun test --path-ignore-patterns 'review/**' test/integration`
+  - E2E: `bun test --path-ignore-patterns 'review/**' test/e2e`
+  - Why: bun positional arg is a substring filter — `bun test test/integration`
+    leaks `review/opencode/.../integration.test.ts` (proven in gate). Every
+    `bun test` invocation MUST include `--path-ignore-patterns 'review/**'`.
 
 ## Constitution
 
 - NEVER edit, build, or test inside `review/` (read-only prior art).
 - NEVER use `ctx.mcp.transform` in plugin setup.
 - NEVER `git add -A` / `git add .`; stage explicit paths only.
-- NEVER run bare `bun test` or bare `tsc` over the root; always target `test/` explicitly
-  (e.g. `bun test test/unit`, `bun test test/unit/scaffold.test.ts`) and use the
+- NEVER run bare `bun test` or bare `tsc` over the root; always include
+  `--path-ignore-patterns 'review/**'` and target `test/` explicitly
+  (e.g. `bun test --path-ignore-patterns 'review/**' test/unit`,
+  `bun test --path-ignore-patterns 'review/**' test/unit/scaffold.test.ts`) and use the
   `tsconfig.json` / `tsconfig.build.json` excludes (which cover `review/`).
 - Do NOT add `effect` or `@opencode/plugin` as runtime dependencies
   (do-not-bundle; `@opencode/plugin` is a peer + dev dependency only).
