@@ -35,9 +35,9 @@ function toolIds(result: unknown): string[] {
       : data !== null && typeof data === "object"
         ? Object.values(data)
         : []
-  return entries
-    .map((e) => (typeof e?.id === "string" ? e.id : typeof e?.name === "string" ? e.name : undefined))
-    .filter((v): v is string => typeof v === "string")
+  return [...new Set(entries
+    .flatMap((e) => [typeof e?.id === "string" ? e.id : undefined, typeof e?.name === "string" ? e.name : undefined])
+    .filter((v): v is string => typeof v === "string"))]
 }
 
 // T10: consolidated in-process suite. ONE OpenCode.create load proves the smoke

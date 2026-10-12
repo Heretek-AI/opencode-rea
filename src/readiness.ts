@@ -130,8 +130,9 @@ function countReaTools(toolListResult: unknown, server: string): number {
       : []
   let count = 0
   for (const entry of entries) {
-    const name = typeof entry?.id === "string" ? entry.id : typeof entry?.name === "string" ? entry.name : ""
-    if (name.startsWith(prefix)) count++
+    const id = typeof entry?.id === "string" ? (entry.id as string) : ""
+    const name = typeof entry?.name === "string" ? (entry.name as string) : ""
+    if (id.startsWith(prefix) || name.startsWith(prefix)) count++
   }
   return count
 }

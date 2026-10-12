@@ -34,5 +34,5 @@ export function parseOptions(raw?: unknown): ReaOptions {
   if (typeof runtime !== "string" || !(RUNTIMES as ReadonlyArray<string>).includes(runtime)) {
     throw new Error(`invalid plugin option "runtime": expected one of "ask"|"allow"|"deny", got ${JSON.stringify(runtime) ?? typeof runtime}`)
   }
-  return { server, runtime: runtime as RuntimeOption }
+  return { server: server.trim(), runtime: runtime as RuntimeOption }
 }
