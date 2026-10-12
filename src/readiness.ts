@@ -122,6 +122,8 @@ function extractMcpStatus(mcpListResult: unknown, server: string): { status: str
 function countReaTools(toolListResult: unknown, server: string): number {
   // Effective names carry the `<sanitized-server>_` prefix (default server is "rea", so
   // this is the rea_ count). Entries expose `id` and/or `name`; check both.
+  // The plugin's own readiness tool matches the default prefix, so exclude it:
+  // the count reflects MCP-server tools only (0 when the server is absent).
   const prefix = `${sanitizeServerNamespace(server)}_`
   const entries: Array<any> = Array.isArray(toolListResult)
     ? toolListResult
@@ -132,6 +134,7 @@ function countReaTools(toolListResult: unknown, server: string): number {
   for (const entry of entries) {
     const id = typeof entry?.id === "string" ? (entry.id as string) : ""
     const name = typeof entry?.name === "string" ? (entry.name as string) : ""
+    if (id === READINESS_TOOL_NAME || name === READINESS_TOOL_NAME) continue
     if (id.startsWith(prefix) || name.startsWith(prefix)) count++
   }
   return count

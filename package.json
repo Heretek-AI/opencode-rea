@@ -20,7 +20,7 @@
     "test": "bun test --path-ignore-patterns 'review/**' test/unit",
     "test:unit": "bun test --path-ignore-patterns 'review/**' test/unit",
     "test:integration": "bun test --path-ignore-patterns 'review/**' test/integration",
-    "test:e2e": "bun test --path-ignore-patterns 'review/**' test/e2e"
+    "test:e2e": "bun run build && bun test --path-ignore-patterns 'review/**' test/e2e"
   },
   "peerDependencies": {
     "@opencode/plugin": "^2"

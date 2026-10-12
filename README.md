@@ -150,8 +150,9 @@ native tool with `codemode: false`; read-only — no writes, no config mutation)
   - `server`: the configured server name (default `"rea"`).
   - `status` / `statusError`: live MCP status for that server from `ctx.mcp.list()`
     (`"missing"` when absent; otherwise the host's status string plus error).
-  - `reaToolCount`: number of tools in `ctx.tool.list()` whose `id`/`name` starts
-    with `<sanitized-server>_` (default the `rea_` count).
+  - `reaToolCount`: number of MCP tools in `ctx.tool.list()` whose `id`/`name` starts
+    with `<sanitized-server>_` (default the `rea_` count), excluding the plugin's
+    own `rea_readiness` tool (0 when the MCP server is absent).
   - `upstreamSkillAvailable`: whether `reverse-engineer-anything` is visible in
     `ctx.skill.list()`.
   - `version`: plugin version read from `package.json` (falls back to `"unknown"`,

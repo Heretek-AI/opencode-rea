@@ -297,7 +297,9 @@ describe("T10 consolidated in-process plugin integration suite", () => {
         expect(typeof output.server).toBe("string")
         expect(output.statusError === null || typeof output.statusError === "string").toBe(true)
         expect(typeof output.reaToolCount).toBe("number")
-        expect(output.reaToolCount).toBeGreaterThanOrEqual(1)
+        // MCP-only count excluding the plugin's own rea_readiness: the hermetic
+        // env registers no MCP server, so this is 0 even though status may vary.
+        expect(output.reaToolCount).toBe(0)
         expect(typeof output.upstreamSkillAvailable).toBe("boolean")
         expect(typeof output.version).toBe("string")
         expect((output.version as string).length).toBeGreaterThan(0)
@@ -347,7 +349,8 @@ describe("T10 consolidated in-process plugin integration suite", () => {
         expect(output.server).toBe("rea")
         expect(output.status).toBe("connected")
         expect(output.statusError).toBeNull()
-        expect(output.reaToolCount).toBe(1)
+        // MCP-only count: the list holds just rea_readiness (self, excluded).
+        expect(output.reaToolCount).toBe(0)
         expect(output.upstreamSkillAvailable).toBe(true)
         expect(typeof output.version).toBe("string")
         expect((output.version as string).length).toBeGreaterThan(0)
