@@ -1,6 +1,6 @@
 # opencode-rea
 
-OpenCode v2 plugin that wires [REA](https://github.com/orea-...) reverse-engineering
+OpenCode v2 plugin that wires [REA](https://github.com/morluto/rea) reverse-engineering
 agents, skills, slash commands, and a readiness tool into OpenCode — on top of an
 already-registered REA MCP server.
 

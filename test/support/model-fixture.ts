@@ -1,5 +1,5 @@
 import { createServer, type Server } from "node:http"
-import { appendFile, mkdir, writeFile } from "node:fs/promises"
+import { appendFile, mkdir, mkdtemp, writeFile } from "node:fs/promises"
 import { tmpdir } from "node:os"
 import { join } from "node:path"
 
@@ -113,11 +113,7 @@ export async function start(options: { responses?: ScriptedResponse[]; logDir?: 
   const modelIds = options.modelIds ?? ["fixture-model", "rea-client-fixture"]
   const requests: RecordedRequest[] = []
   const probes: RecordedProbe[] = []
-  const logDir = options.logDir ?? (await (async () => {
-    const d = join(tmpdir(), `t02-fixture-${Date.now()}-${Math.floor(Math.random() * 1e6)}`)
-    await mkdir(d, { recursive: true })
-    return d
-  })())
+  const logDir = options.logDir ?? (await mkdtemp(join(tmpdir(), "t02-fixture-")))
   await mkdir(logDir, { recursive: true })
   const logFile = join(logDir, "requests.jsonl")
 

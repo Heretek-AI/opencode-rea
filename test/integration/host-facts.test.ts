@@ -25,8 +25,9 @@ describe("F1 host list shapes", () => {
       },
     })
     const f1env = await mkIsolatedEnv()
+    let opencode: Awaited<ReturnType<typeof OpenCode.create>> | undefined
     try {
-      const opencode = await OpenCode.create({
+      opencode = await OpenCode.create({
         config: { directory: f1env.workspaceDir, project: false, content: "{}" },
         models: { fetch: false },
         fs: { filewatcher: false },
@@ -53,8 +54,8 @@ describe("F1 host list shapes", () => {
     expect(captured.skill).toHaveProperty("data")
     expect(captured.skill).toHaveProperty("location")
     expect(Array.isArray(captured.tool)).toBe(true)
-      await opencode.close().catch(() => {})
     } finally {
+      await opencode?.close().catch(() => {})
       await f1env.cleanup()
     }
   }, 30_000)

@@ -19,8 +19,9 @@ import { OpenCode } from "@opencode/sdk"
 describe("T04 options boundary via real host", () => {
   test("real plugin setup succeeds on defaults (smoke)", async () => {
     const env = await mkIsolatedEnv()
+    let opencode: Awaited<ReturnType<typeof OpenCode.create>> | undefined
     try {
-      const opencode = await OpenCode.create({
+      opencode = await OpenCode.create({
         config: { directory: env.workspaceDir, project: false, content: "{}" },
         models: { fetch: false },
         fs: { filewatcher: false },
@@ -43,8 +44,8 @@ describe("T04 options boundary via real host", () => {
       // Healthy: setup must have run without throwing (a setup throw would
       // mark it failed — verified with a throwing-setup negative control).
       expect((rea as any)?.state?.status).toBe("active")
-      await opencode.close().catch(() => {})
     } finally {
+      await opencode?.close().catch(() => {})
       await env.cleanup()
     }
   }, 30_000)
