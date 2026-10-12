@@ -136,3 +136,81 @@ describe("T03 CI skeleton (.github/workflows/ci.yml)", () => {
     expect(String(scripts["test:e2e"])).toContain("test/e2e")
   })
 })
+
+describe("T16 CI hardening (compat lane, bun cache, failure artifacts)", () => {
+  interface T16Step {
+    name?: unknown
+    uses?: unknown
+    run?: unknown
+    if?: unknown
+    with?: Record<string, unknown>
+  }
+
+  interface T16Job {
+    name?: unknown
+    "runs-on"?: unknown
+    steps?: T16Step[]
+  }
+
+  async function load(): Promise<Record<string, T16Job>> {
+    const text = await Bun.file(WORKFLOW_PATH).text()
+    const yaml = Bun.YAML.parse(text) as unknown as { jobs?: Record<string, T16Job> }
+    return yaml.jobs ?? {}
+  }
+
+  function runs(job: T16Job): string[] {
+    return (job.steps ?? []).map((s) => (typeof s.run === "string" ? s.run : "")).filter(Boolean)
+  }
+
+  test("e2e-compat job exists on ubuntu and installs latest compat versions", async () => {
+    const jobs = await load()
+    expect(jobs).toSatisfy((j) => "e2e-compat" in (j as object))
+    const job = jobs["e2e-compat"] as T16Job
+    expect(String(job["runs-on"] ?? "")).toMatch(/ubuntu/)
+    expect(String(job.name ?? "")).toMatch(/compat/i)
+    const all = runs(job)
+    expect(all.some((r) => r.includes("rea-agents@latest") && r.includes("@opencode/cli@latest"))).toBe(true)
+  })
+
+  test("e2e-compat runs the e2e suite with review/** excluded", async () => {
+    const jobs = await load()
+    const all = runs(jobs["e2e-compat"] as T16Job)
+    expect(all.some((r) => r.includes("bun test --path-ignore-patterns 'review/**' test/e2e"))).toBe(true)
+  })
+
+  test("pinned versions preserved: other jobs never install @latest", async () => {
+    const jobs = await load()
+    for (const id of ["static", "unit", "integration", "e2e"]) {
+      const all = runs(jobs[id] as T16Job)
+      expect(all.some((r) => r.includes("@latest"))).toBe(false)
+    }
+  })
+
+  test("bun dependency caching present across all jobs", async () => {
+    const jobs = await load()
+    for (const id of ["static", "unit", "integration", "e2e", "e2e-compat"]) {
+      const steps = (jobs[id] as T16Job).steps ?? []
+      const setupBunCached = steps.some(
+        (s) => String(s.uses ?? "").startsWith("oven-sh/setup-bun") && s.with !== undefined && "cache" in (s.with as object),
+      )
+      const actionsCache = steps.some((s) => String(s.uses ?? "").startsWith("actions/cache"))
+      expect(setupBunCached || actionsCache).toBe(true)
+    }
+  })
+
+  test("e2e jobs upload failure artifacts with scoped names", async () => {
+    const jobs = await load()
+    const expected: Record<string, string> = {
+      e2e: "e2e-logs-e2e",
+      "e2e-compat": "e2e-logs-e2e-compat",
+    }
+    for (const [id, name] of Object.entries(expected)) {
+      const steps = ((jobs[id] as T16Job).steps ?? []) as T16Step[]
+      const upload = steps.find((s) => String(s.uses ?? "").includes("upload-artifact"))
+      expect(upload).toBeDefined()
+      expect(String((upload as T16Step).if ?? "")).toContain("failure()")
+      expect(String((upload?.with?.["name"] ?? ""))).toContain(name)
+      expect(String(upload?.with?.["path"] ?? "")).toContain("test-results")
+    }
+  })
+})
