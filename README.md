@@ -48,7 +48,7 @@ Configure under the plugin's options (keyed by plugin id `rea`):
 
 | Key       | Type                       | Default | Meaning                                                        |
 |-----------|----------------------------|---------|----------------------------------------------------------------|
-| `server`  | string                     | `"rea"` | MCP server name; prefixes permission actions and tool counts (`<server>_<tool>`) |
+| `server`  | string (non-empty)     | `"rea"` | MCP server name; permission actions and tool counts use the host-sanitized namespace (`server.replace(/[^a-zA-Z0-9_-]/g, "_")` + `_<tool>`) |
 | `runtime` | `"ask"` \| `"allow"` \| `"deny"` | `"ask"` | Approval policy applied to the 21 runtime-effect tools (see Agents) |
 
 Validation (`src/options.ts`, `parseOptions`):
@@ -57,6 +57,7 @@ Validation (`src/options.ts`, `parseOptions`):
 - Unknown keys fail setup: `unknown plugin option: "<key>"`.
 - Wrong types fail setup:
   - `invalid plugin option "server": expected a string, got <typeof>`
+  - empty/whitespace-only `server` fails setup: `invalid plugin option "server": expected a non-empty string, got <value>`
   - `invalid plugin option "runtime": expected one of "ask"|"allow"|"deny", got <value>`
 - A non-object (e.g. an array) fails setup:
   `invalid plugin options: expected an object, got <array|typeof>`.
@@ -74,17 +75,17 @@ Source of truth: `src/agents.ts` + `agents/*.md` (registered via
 | `rea-runtime` | `agents/rea-runtime.md` | `subagent` | Runtime observer. Answers what static evidence cannot by observing execution within the declared target scope. |
 | `rea-auditor` | `agents/rea-auditor.md` | `subagent` | Evidence auditor. Verifies findings against the observations/inferences/unknowns discipline; verifies, never redoes. |
 
-Edit / subagent / runtime-effect gating (`buildAgentPermissions`, `src/agents.ts`;
-permission actions for REA tools use the `<server>_<tool>` shape, resource `"*"`):
+Edit / subagent / shell / runtime-effect gating (`buildAgentPermissions`, `src/agents.ts`;
+permission actions for REA tools use the `<sanitized-server>_<tool>` shape, resource `"*"`):
 
-- `rea`: keeps defaults — **no** `edit`/`subagent` denies. Only the 21
+- `rea`: keeps defaults — **no** `edit`/`subagent`/`shell` denies. Only the 21
   runtime-effect tools (`src/effects.ts`, `RUNTIME_EFFECT_TOOLS`) gate on the
   `runtime` option (`effect: options.runtime`).
-- `rea-analyst`: static-only — `edit → deny`, `subagent → deny`, **and** all 21
+- `rea-analyst`: static-only — `edit → deny`, `subagent → deny`, `shell → deny`, **and** all 21
   runtime-effect tools → `deny` regardless of the `runtime` option.
-- `rea-runtime`: no edits, no subagents (`edit → deny`, `subagent → deny`), but
+- `rea-runtime`: no edits, no subagents, no shell (`edit → deny`, `subagent → deny`, `shell → deny`), but
   runtime-effect tools gate on the `runtime` option.
-- `rea-auditor`: read-only — `edit → deny`, `subagent → deny`, all 21
+- `rea-auditor`: read-only — `edit → deny`, `subagent → deny`, `shell → deny`, all 21
   runtime-effect tools → `deny`.
 
 The 21 runtime-effect tools (`src/effects.ts`, data-loss/device/foreign-code axis
@@ -124,7 +125,7 @@ Source of truth: `src/commands.ts` (registered via `ctx.command.transform`).
 | Command      | Description |
 |--------------|-------------|
 | `/rea`       | Switch to the `rea` investigator agent and run a staged investigation (`rea-investigation` skill: scope → gather with evidence → infer only from cited evidence). |
-| `/rea-doctor`| Run the REA readiness check by calling the `<server>_readiness` tool (default `rea_readiness`); report each item and act on the returned remediation. |
+| `/rea-doctor`| Run the REA readiness check by calling the `rea_readiness` tool; report each item and act on the returned remediation. |
 | `/rea-report`| Produce the REA evidence report (observations vs inferences vs unknowns, every claim with its Evidence ID), then delegate a check to the `rea-auditor` agent. |
 
 REA's six MCP prompts surface as host commands under the `rea:<prompt>` namespace
@@ -150,7 +151,7 @@ native tool with `codemode: false`; read-only — no writes, no config mutation)
   - `status` / `statusError`: live MCP status for that server from `ctx.mcp.list()`
     (`"missing"` when absent; otherwise the host's status string plus error).
   - `reaToolCount`: number of tools in `ctx.tool.list()` whose `id`/`name` starts
-    with `<server>_` (default the `rea_` count).
+    with `<sanitized-server>_` (default the `rea_` count).
   - `upstreamSkillAvailable`: whether `reverse-engineer-anything` is visible in
     `ctx.skill.list()`.
   - `version`: plugin version read from `package.json` (falls back to `"unknown"`,

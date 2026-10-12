@@ -1,4 +1,5 @@
 import type { ReaOptions } from "./options.js"
+import { READINESS_TOOL_NAME } from "./readiness.js"
 
 export const COMMAND_IDS = ["rea", "rea-doctor", "rea-report"] as const
 
@@ -93,8 +94,8 @@ function reaReportText(): string {
 }
 
 /** Register the 3 rea slash commands via ctx.command.transform. */
-export async function registerCommands(ctx: CommandCtxLike, options: ReaOptions): Promise<void> {
-  const readinessTool = `${options.server}_readiness`
+export async function registerCommands(ctx: CommandCtxLike, _options: ReaOptions): Promise<void> {
+  const readinessTool = READINESS_TOOL_NAME
   await ctx.command.transform((editor) => {
     editor.add({
       name: "rea",

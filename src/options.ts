@@ -7,6 +7,11 @@ export interface ReaOptions {
 
 const RUNTIMES: ReadonlyArray<RuntimeOption> = ["ask", "allow", "deny"]
 
+/** Mirror the host MCP namespace derivation (prior-art tool/mcp.ts name()). */
+export function sanitizeServerNamespace(server: string): string {
+  return server.replace(/[^a-zA-Z0-9_-]/g, "_")
+}
+
 export function parseOptions(raw?: unknown): ReaOptions {
   if (raw === undefined || raw === null) return { server: "rea", runtime: "ask" }
   if (typeof raw !== "object" || Array.isArray(raw)) {
@@ -21,6 +26,9 @@ export function parseOptions(raw?: unknown): ReaOptions {
   const server = input.server === undefined ? "rea" : input.server
   if (typeof server !== "string") {
     throw new Error(`invalid plugin option "server": expected a string, got ${typeof server}`)
+  }
+  if (server.trim().length === 0) {
+    throw new Error(`invalid plugin option "server": expected a non-empty string, got ${JSON.stringify(server)}`)
   }
   const runtime = input.runtime === undefined ? "ask" : input.runtime
   if (typeof runtime !== "string" || !(RUNTIMES as ReadonlyArray<string>).includes(runtime)) {

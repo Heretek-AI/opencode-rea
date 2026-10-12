@@ -111,20 +111,21 @@ describe("T07 agents: ids and registration", () => {
 
 describe("T07 agents: permission matrix (agent x runtime)", () => {
   for (const runtime of ["ask", "allow", "deny"] as const) {
-    test(`rea gets 21 tool rules with effect "${runtime}" and no edit/subagent denies`, () => {
+    test(`rea gets 21 tool rules with effect "${runtime}" and no edit/subagent/shell denies`, () => {
       const rules = buildAgentPermissions("rea", { server: "rea", runtime })
       expect(rules.length).toBe(RUNTIME_EFFECT_TOOLS.length)
-      expect(rules.some((r) => r.action === "edit" || r.action === "subagent")).toBe(false)
+      expect(rules.some((r) => r.action === "edit" || r.action === "subagent" || r.action === "shell")).toBe(false)
       for (const tool of RUNTIME_EFFECT_TOOLS) {
         expect(rules).toContainEqual({ action: `rea_${tool.name}`, resource: "*", effect: runtime })
       }
     })
 
-    test(`rea-analyst is static-only under runtime "${runtime}" (edit+subagent deny, 21 tool denies)`, () => {
+    test(`rea-analyst is static-only under runtime "${runtime}" (edit+subagent+shell deny, 21 tool denies)`, () => {
       const rules = buildAgentPermissions("rea-analyst", { server: "rea", runtime })
-      expect(rules.length).toBe(2 + RUNTIME_EFFECT_TOOLS.length)
+      expect(rules.length).toBe(3 + RUNTIME_EFFECT_TOOLS.length)
       expect(rules[0]).toEqual({ action: "edit", resource: "*", effect: "deny" })
       expect(rules[1]).toEqual({ action: "subagent", resource: "*", effect: "deny" })
+      expect(rules[2]).toEqual({ action: "shell", resource: "*", effect: "deny" })
       for (const tool of RUNTIME_EFFECT_TOOLS) {
         expect(rules).toContainEqual({ action: `rea_${tool.name}`, resource: "*", effect: "deny" })
       }
@@ -136,22 +137,29 @@ describe("T07 agents: permission matrix (agent x runtime)", () => {
       )
     })
 
-    test(`rea-runtime gates tools with "${runtime}" while denying edit+subagent`, () => {
+    test(`rea-runtime gates tools with "${runtime}" while denying edit+subagent+shell`, () => {
       const rules = buildAgentPermissions("rea-runtime", { server: "rea", runtime })
-      expect(rules.length).toBe(2 + RUNTIME_EFFECT_TOOLS.length)
+      expect(rules.length).toBe(3 + RUNTIME_EFFECT_TOOLS.length)
       expect(rules[0]).toEqual({ action: "edit", resource: "*", effect: "deny" })
       expect(rules[1]).toEqual({ action: "subagent", resource: "*", effect: "deny" })
+      expect(rules[2]).toEqual({ action: "shell", resource: "*", effect: "deny" })
       for (const tool of RUNTIME_EFFECT_TOOLS) {
         expect(rules).toContainEqual({ action: `rea_${tool.name}`, resource: "*", effect: runtime })
       }
     })
   }
 
-  test("server prefix parameterizes tool actions", () => {
+  test("server prefix parameterizes tool actions (host-sanitized namespace)", () => {
     const rules = buildAgentPermissions("rea", { server: "custom", runtime: "allow" })
     expect(rules.every((r) => r.action.startsWith("custom_"))).toBe(true)
     expect(rules).toContainEqual({ action: "custom_annotate_native_function", resource: "*", effect: "allow" })
     expect(rules.some((r) => r.action.startsWith("rea_"))).toBe(false)
+  })
+
+  test("server names sanitize to the host namespace", () => {
+    const rules = buildAgentPermissions("rea", { server: "my.server", runtime: "allow" })
+    expect(rules).toContainEqual({ action: "my_server_annotate_native_function", resource: "*", effect: "allow" })
+    expect(rules.some((r) => r.action.includes("."))).toBe(false)
   })
 
   test("unknown agent id throws", () => {

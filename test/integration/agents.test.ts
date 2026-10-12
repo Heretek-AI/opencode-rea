@@ -99,11 +99,13 @@ describe("T07 agents via real host", () => {
             expect((agent?.system ?? "").length).toBeGreaterThan(0)
             expect(agent?.permissions).toEqual(buildAgentPermissions(id, { server: "rea", runtime }))
           }
-          // Lead keeps defaults: no edit/subagent denies; specialists deny both.
+          // Lead keeps defaults: no edit/subagent/shell denies; specialists deny all three.
           expect(store.get("rea")?.permissions.some((r: any) => r.action === "edit")).toBe(false)
+          expect(store.get("rea")?.permissions.some((r: any) => r.action === "shell")).toBe(false)
           for (const id of ["rea-analyst", "rea-runtime", "rea-auditor"] as const) {
             expect(store.get(id)?.permissions).toContainEqual({ action: "edit", resource: "*", effect: "deny" })
             expect(store.get(id)?.permissions).toContainEqual({ action: "subagent", resource: "*", effect: "deny" })
+            expect(store.get(id)?.permissions).toContainEqual({ action: "shell", resource: "*", effect: "deny" })
           }
           // Runtime-effect tool coverage on every agent.
           for (const id of AGENT_IDS) {
@@ -165,13 +167,16 @@ describe("T07 agents via real host", () => {
         expect(perms("rea")).toContainEqual({ action: "rea_capture_process_scenario", resource: "*", effect: "ask" })
         expect(perms("rea").some((r: any) => r.action === "edit" && r.effect === "deny")).toBe(false)
         expect(perms("rea").some((r: any) => r.action === "subagent" && r.effect === "deny")).toBe(false)
+        expect(perms("rea").some((r: any) => r.action === "shell" && r.effect === "deny")).toBe(false)
         for (const id of ["rea-analyst", "rea-auditor"] as const) {
           expect(perms(id)).toContainEqual({ action: "edit", resource: "*", effect: "deny" })
           expect(perms(id)).toContainEqual({ action: "subagent", resource: "*", effect: "deny" })
+          expect(perms(id)).toContainEqual({ action: "shell", resource: "*", effect: "deny" })
           expect(perms(id)).toContainEqual({ action: "rea_capture_process_scenario", resource: "*", effect: "deny" })
         }
         expect(perms("rea-runtime")).toContainEqual({ action: "edit", resource: "*", effect: "deny" })
         expect(perms("rea-runtime")).toContainEqual({ action: "subagent", resource: "*", effect: "deny" })
+        expect(perms("rea-runtime")).toContainEqual({ action: "shell", resource: "*", effect: "deny" })
         expect(perms("rea-runtime")).toContainEqual({
           action: "rea_capture_process_scenario",
           resource: "*",

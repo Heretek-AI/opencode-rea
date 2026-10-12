@@ -1,8 +1,8 @@
 import { readFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
-import { Schema } from "effect"
 import type { ReaOptions } from "./options.js"
+import { sanitizeServerNamespace } from "./options.js"
 
 export const READINESS_TOOL_NAME = "rea_readiness"
 export const UPSTREAM_SKILL_ID = "reverse-engineer-anything"
@@ -36,16 +36,33 @@ interface ReadinessCtxLike {
   }
 }
 
-const ReadinessInputSchema = Schema.Struct({})
-const ReadinessOutputSchema = Schema.Struct({
-  server: Schema.String,
-  status: Schema.String,
-  statusError: Schema.NullOr(Schema.String),
-  reaToolCount: Schema.Number,
-  upstreamSkillAvailable: Schema.Boolean,
-  version: Schema.String,
-  remediation: Schema.Array(Schema.String),
-})
+const ReadinessInputSchema = {
+  type: "object",
+  properties: {},
+  additionalProperties: false,
+} as const
+const ReadinessOutputSchema = {
+  type: "object",
+  properties: {
+    server: { type: "string" },
+    status: { type: "string" },
+    statusError: { anyOf: [{ type: "string" }, { type: "null" }] },
+    reaToolCount: { type: "number" },
+    upstreamSkillAvailable: { type: "boolean" },
+    version: { type: "string" },
+    remediation: { type: "array", items: { type: "string" } },
+  },
+  required: [
+    "server",
+    "status",
+    "statusError",
+    "reaToolCount",
+    "upstreamSkillAvailable",
+    "version",
+    "remediation",
+  ],
+  additionalProperties: false,
+} as const
 
 /** Advice strings only: never executed or written by the tool. */
 export function buildRemediation(): string[] {
@@ -103,9 +120,9 @@ function extractMcpStatus(mcpListResult: unknown, server: string): { status: str
 }
 
 function countReaTools(toolListResult: unknown, server: string): number {
-  // Effective names carry the `<server>_` prefix (default server is "rea", so
+  // Effective names carry the `<sanitized-server>_` prefix (default server is "rea", so
   // this is the rea_ count). Entries expose `id` and/or `name`; check both.
-  const prefix = `${server}_`
+  const prefix = `${sanitizeServerNamespace(server)}_`
   const entries: Array<any> = Array.isArray(toolListResult)
     ? toolListResult
     : Array.isArray((toolListResult as { data?: unknown } | null)?.data)
@@ -161,10 +178,11 @@ export async function registerReadiness(ctx: ReadinessCtxLike, options: ReaOptio
           remediation: [...remediation],
         }
         const skillText = upstreamSkillAvailable ? "upstream skill available" : "upstream skill missing"
+        const toolPrefix = `${sanitizeServerNamespace(options.server)}_`
         const content =
           `rea_readiness: server "${options.server}" status "${status}"` +
           (statusError ? ` (${statusError})` : "") +
-          `, ${reaToolCount} ${options.server}_ tool(s), ${skillText}, version ${version}.` +
+          `, ${reaToolCount} ${toolPrefix} tool(s), ${skillText}, version ${version}.` +
           ` Remediation: ${remediation.join(" ; ")}`
         return { output, content }
       },

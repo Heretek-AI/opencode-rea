@@ -1,5 +1,5 @@
 import { describe, expect, test } from "bun:test"
-import { parseOptions } from "../../src/options.js"
+import { parseOptions, sanitizeServerNamespace } from "../../src/options.js"
 import plugin from "../../src/index.js"
 
 describe("T04 options boundary: parseOptions", () => {
@@ -72,6 +72,29 @@ describe("T04 options boundary: parseOptions", () => {
       }
       expect(error).toBeInstanceOf(Error)
     }
+  })
+
+  test("empty/whitespace server fails with non-empty error", () => {
+    for (const bad of ["", "   ", "\t\n"]) {
+      let error: unknown
+      try {
+        parseOptions({ server: bad })
+      } catch (e) {
+        error = e
+      }
+      expect(error).toBeInstanceOf(Error)
+      expect(String((error as Error).message)).toContain("non-empty")
+    }
+  })
+
+  test("sanitizeServerNamespace mirrors the host MCP namespace", () => {
+    expect(sanitizeServerNamespace("rea")).toBe("rea")
+    expect(sanitizeServerNamespace("custom")).toBe("custom")
+    expect(sanitizeServerNamespace("my-server_1")).toBe("my-server_1")
+    expect(sanitizeServerNamespace("ABC")).toBe("ABC")
+    expect(sanitizeServerNamespace("rea:foo")).toBe("rea_foo")
+    expect(sanitizeServerNamespace("my.server")).toBe("my_server")
+    expect(sanitizeServerNamespace("a b")).toBe("a_b")
   })
 })
 

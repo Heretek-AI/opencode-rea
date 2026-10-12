@@ -196,7 +196,8 @@ async function assertDirectRegistration() {
     expect(text.toLowerCase()).toContain("evidence")
   }
 
-  // Custom server prefix flows into the rea-doctor readiness tool name.
+  // Custom server does NOT change the rea-doctor readiness tool name:
+  // the readiness tool is a constant native tool (rea_readiness).
   {
     const calls: Array<any> = []
     const ctx = {
@@ -218,6 +219,7 @@ async function assertDirectRegistration() {
       },
     }
     await registerCommands(ctx as any, { server: "custom", runtime: "ask" })
-    expect(String(calls[0]?.text ?? "")).toContain("custom_readiness")
+    expect(String(calls[0]?.text ?? "")).toContain("rea_readiness")
+    expect(String(calls[0]?.text ?? "")).not.toContain("custom_readiness")
   }
 }

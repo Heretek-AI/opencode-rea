@@ -4,6 +4,7 @@ import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
 import { RUNTIME_EFFECT_TOOLS } from "./effects.js"
 import type { ReaOptions, RuntimeOption } from "./options.js"
+import { sanitizeServerNamespace } from "./options.js"
 
 export const AGENT_IDS = ["rea", "rea-analyst", "rea-runtime", "rea-auditor"] as const
 
@@ -85,7 +86,8 @@ export function parseAgentFile(content: string, agentId = "unknown"): ParsedAgen
 
 /**
  * Permission rules for one agent. Tool actions use the MCP permission shape
- * `<server>_<tool>` (prior-art tool/mcp.ts name()); edit/write/patch share
+ * `<sanitized-server>_<tool>` (prior-art tool/mcp.ts name(), mirrored via
+ * sanitizeServerNamespace); edit/write/patch share
  * the `edit` action. Rules do not overlap except by design, and wildcard
  * denies come first so tool rules are the LAST matching rules for their
  * actions (prior-art permission.ts evaluate uses findLast).
@@ -94,14 +96,15 @@ export function buildAgentPermissions(
   agentId: AgentId | string,
   options: ReaOptions,
 ): ReadonlyArray<AgentPermissionRule> {
+  const namespace = sanitizeServerNamespace(options.server)
   const toolRules = RUNTIME_EFFECT_TOOLS.map((tool) => ({
-    action: `${options.server}_${tool.name}`,
+    action: `${namespace}_${tool.name}`,
     resource: "*",
   }))
   switch (agentId) {
     case "rea":
       // Lead investigator keeps defaults: only runtime-effect tools gate on
-      // the `runtime` option; no edit/subagent denies.
+      // the `runtime` option; no edit/subagent/shell denies.
       return toolRules.map((rule) => ({ ...rule, effect: options.runtime }))
     case "rea-analyst":
     case "rea-auditor":
@@ -109,12 +112,14 @@ export function buildAgentPermissions(
       return [
         { action: "edit", resource: "*", effect: "deny" as const },
         { action: "subagent", resource: "*", effect: "deny" as const },
+        { action: "shell", resource: "*", effect: "deny" as const },
         ...toolRules.map((rule) => ({ ...rule, effect: "deny" as const })),
       ]
     case "rea-runtime":
       return [
         { action: "edit", resource: "*", effect: "deny" as const },
         { action: "subagent", resource: "*", effect: "deny" as const },
+        { action: "shell", resource: "*", effect: "deny" as const },
         ...toolRules.map((rule) => ({ ...rule, effect: options.runtime })),
       ]
     default:
