@@ -28,6 +28,20 @@
   (do-not-bundle; `@opencode/plugin` is a peer + dev dependency only).
 - Do NOT stage `MASTER_ORCHESTRATOR_PROMPT.md`, `review/`, or `.worktrees/`.
 
+## Docs (T15)
+
+- User docs live in `README.md` (repo root): prerequisites (`rea setup
+  --client opencode` first; plugin reuses that registration, never registers or
+  edits an MCP server, never calls `ctx.mcp.transform`), install
+  (`opencode plugin add <package or git spec>`, package `opencode-rea`),
+  options (`server` default `"rea"`, `runtime` `"ask"|"allow"|"deny"` default
+  `"ask"`; see `src/options.ts`), agents/skills/commands/readiness (sources of
+  truth: `src/agents.ts` + `agents/*.md`, `src/skills.ts` + `skills/*/SKILL.md`,
+  `src/commands.ts`, `src/readiness.ts`).
+- Docs accuracy is machine-checked by `test/unit/docs.test.ts` (README identity
+  vs `package.json`, agent/skill files on disk, commands vs `src/commands.ts`
+  exports, options/readiness contract vs `src/options.ts`/`src/readiness.ts`).
+
 ## Host Facts Proven (T02)
 
 Real-toolchain harness: `test/support/model-fixture.ts` (loopback OpenAI-compatible
