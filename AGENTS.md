@@ -33,7 +33,7 @@
 - User docs live in `README.md` (repo root): prerequisites (`rea setup
   --client opencode` first; plugin reuses that registration, never registers or
   edits an MCP server, never calls `ctx.mcp.transform`), install
-  (`opencode plugin add <package or git spec>`, package `opencode-rea`),
+  (`opencode plugin add <package or git spec>`, package `@heretek-ai/opencode-rea`),
   options (`server` default `"rea"`, `runtime` `"ask"|"allow"|"deny"` default
   `"ask"`; see `src/options.ts`), agents/skills/commands/readiness (sources of
   truth: `src/agents.ts` + `agents/*.md`, `src/skills.ts` + `skills/*/SKILL.md`,

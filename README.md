@@ -4,7 +4,7 @@ OpenCode v2 plugin that wires [REA](https://github.com/morluto/rea) reverse-engi
 agents, skills, slash commands, and a readiness tool into OpenCode — on top of an
 already-registered REA MCP server.
 
-- Package: `opencode-rea`
+- Package: `@heretek-ai/opencode-rea`
 - Version: `0.1.0`
 - Entry: `./dist/index.js` (`exports: { ".": "./dist/index.js" }`)
 - Shipped files: `dist`, `skills`, `agents`, `index.js`
@@ -37,7 +37,7 @@ If tools are missing later, the readiness tool points you back at doctor/setup
 ## Install
 
 ```sh
-opencode plugin add opencode-rea
+opencode plugin add @heretek-ai/opencode-rea
 # or a git spec, e.g.
 # opencode plugin add git@github.com:<org>/opencode-rea.git
 ```

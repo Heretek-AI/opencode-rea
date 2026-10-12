@@ -15,7 +15,7 @@ describe("T15 docs guard (README accuracy)", () => {
       files: string[]
     }
     // Hard-assert known release values (fail loudly on drift).
-    expect(pkg.name).toBe("opencode-rea")
+    expect(pkg.name).toBe("@heretek-ai/opencode-rea")
     expect(pkg.version).toBe("0.1.0")
     expect(pkg.exports).toEqual({ ".": "./dist/index.js" })
     for (const entry of ["dist", "skills", "agents", "index.js"]) {

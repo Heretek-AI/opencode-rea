@@ -3,7 +3,7 @@ import { describe, expect, test } from "bun:test"
 describe("T01 package scaffold", () => {
   test("package.json fields", async () => {
     const pkg = await Bun.file("package.json").json()
-    expect(pkg.name).toBe("opencode-rea")
+    expect(pkg.name).toBe("@heretek-ai/opencode-rea")
     expect(pkg.type).toBe("module")
     expect(pkg.exports).toEqual({ ".": "./dist/index.js" })
     expect(pkg.files).toEqual(expect.arrayContaining(["dist", "skills", "agents"]))
