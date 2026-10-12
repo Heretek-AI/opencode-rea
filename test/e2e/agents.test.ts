@@ -81,6 +81,24 @@ function summarizeParts(parts: any[]): string {
   return JSON.stringify(parts.map((p: any) => ({ tool: p?.tool, status: p?.state?.status })))
 }
 
+// QA hardening (D1/D2): extract human-readable error text from --format json
+// tool_use parts. The CLI emits MiniToolPart where state.error is a STRING
+// (event.data.error.message); the session schema uses an OBJECT
+// {type,message}. Handle both so the permission-regex assert is robust.
+function errorTexts(parts: any[]): string[] {
+  return parts
+    .filter((p: any) => p?.state?.status === "error")
+    .map((p: any) => {
+      const e = p?.state?.error
+      if (typeof e === "string") return e
+      if (e && typeof e === "object") {
+        const joined = [e.message, e.type, e.text, e.feedback].filter((s) => typeof s === "string" && s.length > 0).join(" | ")
+        return joined.length > 0 ? joined : JSON.stringify(e)
+      }
+      return JSON.stringify(p?.state ?? "")
+    })
+}
+
 describe("T13 delegation: rea delegates to rea-analyst through subagent", () => {
   test("rea delegates to rea-analyst through subagent and receives its result", async () => {
     console.log(`[${LIVE_NOTE}] T13 test 1 proving delegation through the native subagent tool`)
@@ -239,6 +257,18 @@ describe("T13 permissions: edit attempted as rea-auditor is denied", () => {
       const writeParts = parts.filter((p: any) => p?.tool === "write")
       expect(writeParts.length).toBeGreaterThan(0)
       expect(writeParts.some((p: any) => p?.state?.status === "error")).toBe(true)
+      // QA hardening (D1): the deny must surface as a permission-flavoured
+      // error, not just any error. LIVE DEVIATION (observed 2026-10-12):
+      // actual deny-path text is
+      //   "No tool named \"write\" is currently available. Please use a tool from the available tool list."
+      // which does NOT match /permission|denied|not allowed|rejected/i — the
+      // host hides the wholly-denied write tool from the catalog and the
+      // scripted call fails generically. Per ticket rule the regex assert is
+      // NOT added (no faking); the texts are logged for the record and the
+      // status asserts above stay as-is.
+      const writeErrors = errorTexts(writeParts)
+      console.log(`[${LIVE_NOTE}] T13 test 2 write error texts:`, JSON.stringify(writeErrors).slice(0, 2000))
+      expect(writeErrors.length).toBeGreaterThan(0)
       // A completed-state write must NOT appear: the deny must hold.
       expect(writeParts.some((p: any) => p?.state?.status === "completed")).toBe(false)
       // The file must NOT have been created.
@@ -291,6 +321,9 @@ describe("T13 permissions: runtime-effect tool gated by agent and runtime option
     expect(runtimeAskRules.some((r) => r.action === "rea_capture_process_scenario" && r.effect === "ask")).toBe(true)
     const runtimeAllowRules = buildAgentPermissions("rea-runtime", { server: "rea", runtime: "allow" })
     expect(runtimeAllowRules.some((r) => r.action === "rea_capture_process_scenario" && r.effect === "allow")).toBe(true)
+    // QA hardening (D4): pure unit cover for the deny option value.
+    const runtimeDenyRules = buildAgentPermissions("rea-runtime", { server: "rea", runtime: "deny" })
+    expect(runtimeDenyRules.some((r) => r.action === "rea_capture_process_scenario" && r.effect === "deny")).toBe(true)
 
     const runCase = async (c: {
       label: string
@@ -431,6 +464,16 @@ describe("T13 permissions: runtime-effect tool gated by agent and runtime option
           expect(runtimeParts.length).toBeGreaterThan(0)
           expect(runtimeParts.some((p: any) => p?.state?.status === "error")).toBe(true)
           expect(runtimeParts.some((p: any) => p?.state?.status === "completed")).toBe(false)
+          // QA hardening (D2): permission-flavoured error requested, but
+          // LIVE DEVIATION (observed 2026-10-12): actual ask-path text is
+          //   "Unable to execute rea_capture_process_scenario"
+          // which does NOT match /permission|denied|not allowed|rejected/i.
+          // Per ticket rule the regex assert is NOT added (no faking); the
+          // texts are logged for the record and the status asserts above
+          // stay as-is.
+          const runtimeErrors = errorTexts(runtimeParts)
+          console.log(`[${LIVE_NOTE}] T13 test 3 ${c.label} runtime error texts:`, JSON.stringify(runtimeErrors).slice(0, 2000))
+          expect(runtimeErrors.length).toBeGreaterThan(0)
         } else {
           // Deny-path (analyst): the host hides wholly-denied tools from the
           // model catalog (whollyDisabled), so no runtime tool_use can occur.
@@ -442,8 +485,12 @@ describe("T13 permissions: runtime-effect tool gated by agent and runtime option
           expect(runtimeAdvertised).toBeUndefined()
           expect(runtimeParts.length).toBe(0)
         }
-        // Log reachability without asserting live-server bytes.
-        console.log(`[${LIVE_NOTE}] T13 test 3 ${c.label} runtime tool in requests:`, bodies.some((b) => b.includes(RUNTIME_TOOL_FRAGMENT)))
+        // Log-only reachability signal (non-authoritative substring: it can
+        // match tool descriptions, not just cataloged tool names — see the
+        // scoped `advertised` set above for the authoritative signal).
+        // Behaviour identical: logging only, no assert on live-server bytes.
+        console.log(`[${LIVE_NOTE}] T13 test 3 ${c.label} runtime tool substring in requests (non-authoritative):`, bodies.some((b) => b.includes(RUNTIME_TOOL_FRAGMENT)))
+        console.log(`[${LIVE_NOTE}] T13 test 3 ${c.label} runtime tool in advertised catalog (authoritative):`, runtimeAdvertised ?? "(none)")
         console.log(`[${LIVE_NOTE}] T13 test 3 ${c.label} model requests:`, fixture.requests.length, "runtimeCalls:", flow.calls)
       } finally {
         await env.cleanup()
@@ -484,5 +531,7 @@ describe("T13 permissions: runtime-effect tool gated by agent and runtime option
       expectation: "completed",
       finalText: "T13-RUNTIME-ALLOW-DONE",
     })
-  }, 600_000)
+  // Measured wall-clock for the 3 sequential sub-cases is ~60s; outer
+  // timeout raised to 900s headroom for cold MCP boot + fixture delays.
+  }, 900_000)
 })
