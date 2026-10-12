@@ -1,0 +1,8 @@
+# Reference clones - read-only, never commit
+review/
+# Dependencies
+node_modules/
+# Build output
+dist/
+# Git worktrees for ticket isolation
+.worktrees/
