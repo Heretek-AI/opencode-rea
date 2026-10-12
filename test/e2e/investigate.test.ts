@@ -217,8 +217,28 @@ describe("T12 E2E golden path: investigate fixture JS app with real REA", () => 
       expect(bodies.some((b) => b.includes("rea-opencode") || b.includes("REA in OpenCode"))).toBe(true)
       expect(bodies.some((b) => b.includes("evidence_id"))).toBe(true)
       expect(bodies.some((b) => b.includes("tool-output/tool_"))).toBe(true)
+      // Self-echo guard (T12 repair r1): the scripted `shell` grep command
+      // embeds `jag_node_`/`jsrg_node_` as regex text and the host echoes
+      // prior assistant tool_calls into later request history, so a bare
+      // substring check over the whole body passes via self-echo even if REA
+      // never ran. Scope node ids to live TOOL RESULT content (role "tool"
+      // carrying the grep stdout): concrete hex ids match
+      // /jag_node_[0-9a-f]+/, while the echoed command text
+      // `jag_node_[a-f0-9]*` does not (next char `[`, not hex).
+      const toolResultTexts = fixture.requests.flatMap((r) => {
+        const msgs = (r.body as any)?.messages
+        if (!Array.isArray(msgs)) return []
+        return msgs.flatMap((m: any) => {
+          if (m?.role !== "tool" && m?.role !== "tool_result" && m?.tool_call_id == null) return []
+          const c = m?.content
+          if (typeof c === "string") return [c]
+          if (Array.isArray(c)) return c.map((p: any) => (typeof p === "string" ? p : (p?.text ?? JSON.stringify(p))))
+          return c != null ? [JSON.stringify(c)] : []
+        })
+      })
+      console.log(`[${LIVE_NOTE}] T12 tool-result messages:`, toolResultTexts.length)
       expect(
-        bodies.some((b) => b.includes("jag_node_") || b.includes("jsrg_node_") || b.includes("graph_id")),
+        toolResultTexts.some((t) => /jag_node_[0-9a-f]+/.test(t) || /jsrg_node_[0-9a-f]+/.test(t) || t.includes("graph_id")),
       ).toBe(true)
       for (const marker of MARKERS) {
         const hits = bodies.map((b, i) => (b.includes(marker) ? i + 1 : -1)).filter((i) => i > 0)
