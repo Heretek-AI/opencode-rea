@@ -5,7 +5,7 @@ agents, skills, slash commands, and a readiness tool into OpenCode — on top of
 already-registered REA MCP server.
 
 - Package: `@heretek-ai/opencode-rea`
-- Version: `0.1.0`
+- Version: `0.1.1`
 - Entry: `./dist/index.js` (`exports: { ".": "./dist/index.js" }`)
 - Shipped files: `dist`, `skills`, `agents`, `index.js`
   (`index.js` at the repo root re-exports `./dist/index.js`: the host resolves a
@@ -160,7 +160,7 @@ native tool with `codemode: false`; read-only — no writes, no config mutation)
   - `remediation`: advice strings **only** (never executed or written by the tool):
     `rea doctor --client opencode --json` and `rea setup --client opencode --dry-run`.
 - Human summary `content`: e.g.
-  `rea_readiness: server "rea" status "connected", 170 rea_ tool(s), upstream skill available, version 0.1.0. Remediation: rea doctor --client opencode --json ; rea setup --client opencode --dry-run`.
+  `rea_readiness: server "rea" status "connected", 170 rea_ tool(s), upstream skill available, version 0.1.1. Remediation: rea doctor --client opencode --json ; rea setup --client opencode --dry-run`.
 
 Use it via `/rea-doctor`, or call `rea_readiness` directly.
 

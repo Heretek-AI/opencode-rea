@@ -1,7 +1,7 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "@heretek-ai/opencode-rea",
-  "version": "0.1.0",
+  "version": "0.1.1",
   "description": "opencode-rea plugin",
   "type": "module",
   "license": "MIT",
