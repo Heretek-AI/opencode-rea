@@ -29,13 +29,13 @@ export {
   isRuntimeEffectTool,
   type DebuggerSessionToolName,
   type EffectCategory,
-  type RuntimeEffectTool,
+  type RuntimeEffect,
 } from "./effects.js"
 export {
   parseOptions,
   sanitizeServerNamespace,
-  type PluginOptions,
-  type RuntimePolicy,
+  type ReaOptions,
+  type RuntimeOption,
 } from "./options.js"
 export {
   DOCTOR_CMD,
@@ -57,7 +57,7 @@ export {
   parseSkillFile,
   registerSkills,
   resolveSkillsDir,
-  type ParsedSkill,
+  type ParsedSkillFile,
   type SkillId,
 } from "./skills.js"
 

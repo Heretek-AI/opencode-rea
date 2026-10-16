@@ -1,6 +1,6 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "opencode-rea",
+  "name": "@heretek-ai/opencode-rea",
   "version": "0.1.2",
   "description": "OpenCode v2 plugin for REA (reverse-engineer-anything) MCP integration",
   "type": "module",

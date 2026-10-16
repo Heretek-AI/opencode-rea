@@ -38,6 +38,7 @@ describe("T08 unit: readiness & Code Mode tool catalog policy", () => {
       ["read", { id: "read", options: { codemode: false } }],
     ])
     const editor = {
+      add: (_tool: any) => undefined,
       namespace: (ns: { name: string; description?: string }) => void described.set(ns.name, ns.description ?? ""),
       list: () => [...entries.values()],
       update: (id: string, fn: (t: any) => void) => {
