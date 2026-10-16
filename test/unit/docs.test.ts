@@ -18,8 +18,8 @@ describe("T15 docs guard (README accuracy)", () => {
       devDependencies?: Record<string, string>
     }
     // Hard-assert known release values (fail loudly on drift).
-    expect(pkg.name).toBe("opencode-rea")
-    expect(pkg.version).toBe("0.1.0")
+    expect(pkg.name).toBe("@heretek-ai/opencode-rea")
+    expect(pkg.version).toBe("0.1.1")
     expect(pkg.exports).toEqual({ ".": "./dist/index.js" })
     expect(pkg.devDependencies?.["rea-agents"]).toBe("6.5.0")
     for (const entry of ["dist", "skills", "agents", "index.js"]) {
@@ -29,7 +29,7 @@ describe("T15 docs guard (README accuracy)", () => {
     const readme = await Bun.file("README.md").text()
     // README must mention the same identity (not invented values).
     expect(readme).toContain("opencode-rea")
-    expect(readme).toContain("0.1.0")
+    expect(readme).toContain("0.1.2")
     expect(readme).toContain("6.5.0")
     expect(readme).toContain("./dist/index.js")
     for (const entry of ["dist", "skills", "agents", "index.js"]) {

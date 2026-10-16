@@ -1,10 +1,17 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
   "name": "opencode-rea",
-  "version": "0.1.0",
+  "version": "0.1.2",
   "description": "OpenCode v2 plugin for REA (reverse-engineer-anything) MCP integration",
   "type": "module",
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Heretek-AI/opencode-rea.git"
+  },
+  "publishConfig": {
+    "access": "public"
+  },
   "exports": {
     ".": "./dist/index.js"
   },
@@ -17,6 +24,7 @@
   "scripts": {
     "check": "tsc --noEmit -p tsconfig.json",
     "build": "tsc -p tsconfig.build.json",
+    "prepublishOnly": "tsc -p tsconfig.build.json",
     "test": "bun test --path-ignore-patterns 'review/**' test/unit",
     "test:unit": "bun test --path-ignore-patterns 'review/**' test/unit",
     "test:integration": "bun test --path-ignore-patterns 'review/**' test/integration",
