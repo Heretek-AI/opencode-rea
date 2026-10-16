@@ -35,14 +35,15 @@
   edits an MCP server, never calls `ctx.mcp.transform`), install
   (`opencode plugin add <package or git spec>`, package `@heretek-ai/opencode-rea`),
   options (`server` default `"rea"`, `runtime` `"ask"|"allow"|"deny"` default
-  `"ask"`; see `src/options.ts`), agents/skills/commands/readiness (sources of
-  truth: `src/agents.ts` + `agents/*.md`, `src/skills.ts` + `skills/*/SKILL.md`,
-  `src/commands.ts`, `src/readiness.ts`).
+  `"ask"`, optional `codemode` boolean; see `src/options.ts`), agents/skills/commands/readiness
+  (sources of truth: `src/agents.ts` + `agents/*.md`, `src/skills.ts` + `skills/*/SKILL.md`,
+  `src/commands.ts`, `src/readiness.ts`, `src/effects.ts` with 31 runtime-effect tools for
+  `rea-agents@6.5.0`).
 - Docs accuracy is machine-checked by `test/unit/docs.test.ts` (README identity
   vs `package.json`, agent/skill files on disk, commands vs `src/commands.ts`
   exports, options/readiness contract vs `src/options.ts`/`src/readiness.ts`).
 
-## Host Facts Proven (T02)
+## Host Facts Proven (T02 & v2 Harness Updates)
 
 Real-toolchain harness: `test/support/model-fixture.ts` (loopback OpenAI-compatible
 HTTP server, real `node:http`, records every request, redacts auth) +
@@ -75,3 +76,9 @@ Only the LLM is scripted; every report path notes live-model behaviour unverifie
   `opencode-ai@1.18.35` POSIX only; T02 proves V2 `opencode v2.0.26` on linux
   (plus E2E smoke `test/e2e/smoke.test.ts`: built plugin loads, run exits 0,
   no `LoadError` in server logs).
+- F7 PASS (`src/agents.ts` `evaluateAgentPermission`): OpenCode v2's
+  `ConfigAgentPlugin` runs in `post` and appends top-level `opencode.json`
+  wildcard `permissions` after plugin transforms; hooking
+  `ctx.permission.hook("evaluate", ...)` preserves `rea-*` agent boundaries
+  even under global `allow-all` while still respecting explicit non-wildcard
+  `agents.<id>.permissions` overrides.

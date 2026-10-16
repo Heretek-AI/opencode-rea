@@ -27,8 +27,11 @@ implementation and must be labeled as such.
 - Separate observed behavior from design choices in both the plan and the
   code. Observed behavior cites Evidence IDs; choices cite requirements,
   constraints, or judgment.
-- Use normal coding tools for the build. Close any opened native session
-  with the appropriate teardown call when the investigation is complete.
+- Use normal coding tools for the build. Close any opened binary or
+  interactive debugger/instrumentation session with the appropriate teardown
+  call (`close_binary`, `close_frida_session`, `close_gdb_session`,
+  `close_rizin_debug_session`, `unload_frida_script`) when the investigation
+  is complete.
 - Preserve caller-selected inputs (paths, output directories, digests,
   metadata) verbatim into the build configuration.
 - Never widen the target or action beyond the declared fields when moving

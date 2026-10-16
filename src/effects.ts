@@ -1,15 +1,14 @@
 // T06 tool-effect classification for runtime gating.
 //
-// Source: prior-art TOOL_EFFECTS destructive formula
-// (review/rea/src/contracts/toolEffects.ts: destructive = mayDiscardData
+// Source: canonical TOOL_EFFECTS destructive formula
+// (rea/src/contracts/toolEffects.ts: destructive = mayDiscardData
 // || executesForeignCode || mutatesDevice) cross-checked against the live
-// rea-agents@6.4.0 tools/list (170 tools). The 7 live destructiveHint=true
-// tools are a subset of this 21-tool list because the installed server
-// under-flags attached-device and analyst-metadata mutations relative to the
-// audited contract. Live openWorldHint (72 tools, mostly read-mostly
-// launch-process/network tools such as list_adb_devices) is deliberately NOT
-// a listing requirement: this module covers the
-// data-loss/device/foreign-code axis only. Live-model behaviour unverified.
+// rea-agents@6.5.0 tools/list (207 tools, 31 destructiveHint=true tools).
+// Live openWorldHint (launchesProcess || accessesNetwork) is deliberately NOT
+// a listing requirement: RUNTIME_EFFECT_TOOLS covers the
+// data-loss/device/foreign-code axis only. Non-destructive debugger session
+// lifecycle tools (DEBUGGER_SESSION_TOOLS) are exported alongside for
+// specialist agent boundary enforcement. Live-model behaviour unverified.
 export type EffectCategory = "executes-foreign-code" | "mutates-device" | "may-discard-data"
 
 export interface RuntimeEffect {
@@ -25,11 +24,20 @@ export const RUNTIME_EFFECT_TOOLS: ReadonlyArray<RuntimeEffect> = [
   { name: "capture_native_ui_scenario", categories: ["executes-foreign-code", "may-discard-data"], reason: "Drives native application code the server does not own and may overwrite prior capture state" },
   { name: "capture_process_scenario", categories: ["executes-foreign-code"], reason: "Runs the caller-selected executable, executing target code the server does not own" },
   { name: "close_binary", categories: ["may-discard-data"], reason: "Clears retained session records for the closed binary" },
+  { name: "close_gdb_session", categories: ["executes-foreign-code"], reason: "Detaches a live inferior with a verified durable TTY output sink, which may resume target execution" },
+  { name: "close_rizin_debug_session", categories: ["executes-foreign-code"], reason: "Detaches a live inferior with a verified TTY output sink, allowing target execution to continue" },
+  { name: "cutter_command", categories: ["executes-foreign-code"], reason: "Runs an arbitrary Rizin command in a live Cutter session that may execute plugin or target effects" },
+  { name: "execute_rizin_command", categories: ["executes-foreign-code", "may-discard-data"], reason: "Executes a Rizin CLI command with plugins enabled that can run foreign code or mutate files" },
   { name: "export_evidence_bundle", categories: ["may-discard-data"], reason: "Replaces the destination file with the exported evidence bundle" },
+  { name: "gdb_console", categories: ["executes-foreign-code"], reason: "Runs an unrestricted GDB CLI command via MI that can execute target code, shell commands, or mutate state" },
   { name: "install_adb_package", categories: ["mutates-device"], reason: "Installs a package on the attached Android device, changing device packages" },
+  { name: "instrument_with_frida", categories: ["executes-foreign-code"], reason: "Runs a caller-supplied Frida script inside the selected process, executing foreign code in the target" },
+  { name: "load_frida_script", categories: ["executes-foreign-code"], reason: "Loads caller-supplied JavaScript into a Frida session, executing code inside the target process" },
   { name: "observe_native_calls", categories: ["executes-foreign-code"], reason: "Drives the caller-owned process that executes target code the server does not own" },
   { name: "observe_web_execution", categories: ["may-discard-data"], reason: "Replaces live page state during observed web execution" },
   { name: "push_adb_file", categories: ["mutates-device"], reason: "Writes a file to the attached Android device, changing device files" },
+  { name: "resume_frida_session", categories: ["executes-foreign-code"], reason: "Resumes a paused Frida spawn session, allowing the target process to execute" },
+  { name: "rizin_debug_command", categories: ["executes-foreign-code", "may-discard-data"], reason: "Executes an unrestricted Rizin debugger command that can run target code or discard buffered output" },
   { name: "set_address_name", categories: ["may-discard-data"], reason: "Overwrites the analyst address name, discarding the prior name" },
   { name: "set_addresses_names", categories: ["may-discard-data"], reason: "Overwrites analyst address names in bulk, discarding prior names" },
   { name: "set_bookmark", categories: ["may-discard-data"], reason: "Overwrites the analyst bookmark at the address, discarding the prior bookmark" },
@@ -37,11 +45,31 @@ export const RUNTIME_EFFECT_TOOLS: ReadonlyArray<RuntimeEffect> = [
   { name: "set_inline_comment", categories: ["may-discard-data"], reason: "Overwrites the analyst inline comment, discarding the prior comment" },
   { name: "start_adb_activity", categories: ["mutates-device"], reason: "Starts an activity on the attached Android device, changing running apps" },
   { name: "start_adb_app", categories: ["mutates-device"], reason: "Starts an app on the attached Android device, changing running apps" },
+  { name: "start_rizin_debug_session", categories: ["executes-foreign-code"], reason: "Starts a persistent Rizin debugger session on the target binary" },
   { name: "stop_adb_app", categories: ["mutates-device"], reason: "Stops an app on the attached Android device, changing running apps" },
   { name: "uninstall_adb_package", categories: ["mutates-device"], reason: "Uninstalls a package from the attached Android device, changing device packages" },
   { name: "unset_bookmark", categories: ["may-discard-data"], reason: "Clears the analyst bookmark, discarding the retained bookmark" },
 ]
 
+/**
+ * Debugger/instrumentation session lifecycle tools whose MCP annotations carry
+ * destructiveHint=false (e.g. spawned target stays paused until resume), but
+ * still attach/spawn debugger sessions and must not run under static-only or
+ * read-only specialist agents.
+ */
+export const DEBUGGER_SESSION_TOOLS = [
+  "close_frida_session",
+  "start_frida_session",
+  "start_gdb_session",
+  "unload_frida_script",
+] as const
+
+export type DebuggerSessionToolName = (typeof DEBUGGER_SESSION_TOOLS)[number]
+
 export function isRuntimeEffectTool(name: string): boolean {
   return RUNTIME_EFFECT_TOOLS.some((entry) => entry.name === name)
+}
+
+export function isDebuggerSessionTool(name: string): boolean {
+  return (DEBUGGER_SESSION_TOOLS as ReadonlyArray<string>).includes(name)
 }

@@ -3,9 +3,11 @@ export type RuntimeOption = "ask" | "allow" | "deny"
 export interface ReaOptions {
   readonly server: string
   readonly runtime: RuntimeOption
+  readonly codemode?: boolean
 }
 
 const RUNTIMES: ReadonlyArray<RuntimeOption> = ["ask", "allow", "deny"]
+const KNOWN_KEYS: ReadonlySet<string> = new Set(["server", "runtime", "codemode"])
 
 /** Mirror the host MCP namespace derivation (prior-art tool/mcp.ts name()). */
 export function sanitizeServerNamespace(server: string): string {
@@ -19,7 +21,7 @@ export function parseOptions(raw?: unknown): ReaOptions {
   }
   const input = raw as Record<string, unknown>
   for (const key of Object.keys(input)) {
-    if (key !== "server" && key !== "runtime") {
+    if (!KNOWN_KEYS.has(key)) {
       throw new Error(`unknown plugin option: "${key}"`)
     }
   }
@@ -34,5 +36,12 @@ export function parseOptions(raw?: unknown): ReaOptions {
   if (typeof runtime !== "string" || !(RUNTIMES as ReadonlyArray<string>).includes(runtime)) {
     throw new Error(`invalid plugin option "runtime": expected one of "ask"|"allow"|"deny", got ${JSON.stringify(runtime) ?? typeof runtime}`)
   }
-  return { server: server.trim(), runtime: runtime as RuntimeOption }
+  if (input.codemode !== undefined && typeof input.codemode !== "boolean") {
+    throw new Error(`invalid plugin option "codemode": expected a boolean, got ${typeof input.codemode}`)
+  }
+  return {
+    server: server.trim(),
+    runtime: runtime as RuntimeOption,
+    ...(input.codemode === undefined ? {} : { codemode: input.codemode }),
+  }
 }

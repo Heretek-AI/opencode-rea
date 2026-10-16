@@ -16,10 +16,12 @@ and never imply that static analysis observed execution.
 - Quote the retained Evidence ID for each observation, plus the operation and
   target it came from so the claim can be re-paged later.
 - Preserve the producer's raw locations and identity fields verbatim. Do not
-  reformat digests, addresses, or ordinals into a lossy form.
-- When a result was truncated by the transport or the client, mark the
-  observation as a preview: use the retained parent ID for smaller views or
-  export the complete record before drawing conclusions from it.
+  reformat digests, addresses, node IDs, or ordinals into a lossy form.
+- When a result was returned as `detail: "summary"` or truncated by the
+  transport or the client, mark the observation as a preview: page via
+  `inspect_analysis_view` using the retained parent `evidence_id` for smaller
+  views or export the complete record (`export_evidence_bundle`) before
+  drawing conclusions from it.
 
 ## Inferences
 

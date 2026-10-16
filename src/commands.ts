@@ -1,4 +1,5 @@
 import type { ReaOptions } from "./options.js"
+import { sanitizeServerNamespace } from "./options.js"
 import { READINESS_TOOL_NAME } from "./readiness.js"
 
 export const COMMAND_IDS = ["rea", "rea-doctor", "rea-report"] as const
@@ -65,36 +66,39 @@ function appendArgs(template: string, args: string): string {
   return `${template}\n\n${args}`
 }
 
-function reaInvestigationText(args: string): string {
+function reaInvestigationText(args: string, options: ReaOptions): string {
+  const namespace = sanitizeServerNamespace(options.server)
   const template = [
     "You are now acting as the rea reverse-engineering investigator agent.",
     "Run a staged investigation following the rea-investigation skill:",
-    "scope the target, gather observations with evidence, then infer only from cited evidence.",
+    "scope the target, gather observations with evidence (preferring detail: \"summary\" first and paging via inspect_analysis_view with parent_evidence_id),",
+    `then infer only from cited evidence using the ${namespace} MCP tool surface.`,
     "Keep a strict observation-vs-inference discipline: every claim cites its evidence,",
     "and unknowns stay explicit until verified by a tool.",
   ].join(" ")
   return appendArgs(template, args)
 }
 
-function reaDoctorText(readinessTool: string): string {
+function reaDoctorText(readinessTool: string, options: ReaOptions): string {
   return [
-    `Run the REA readiness check by calling the ${readinessTool} tool.`,
-    `Report each readiness item and act on the returned remediation:`,
+    `Run the REA readiness check for server "${options.server}" by calling the ${readinessTool} tool.`,
+    "Report each readiness item (server status, total/codemode/direct tool counts, upstream skill availability, version) and act on the returned remediation:",
     "apply the safe fixes you can, and list the remaining follow-ups with owners.",
   ].join(" ")
 }
 
-function reaReportText(): string {
-  return [
-    "Produce the REA evidence report for this session: organize observations vs",
-    "inferences vs unknowns, cite every claim with its Evidence ID, and flag",
+function reaReportText(args: string): string {
+  const template = [
+    "Produce the REA evidence report for this session following the rea-evidence-report skill: organize observations vs",
+    "inferences vs unknowns, cite every claim with its Evidence ID, preserve null/unknown states without coercing them, and flag",
     "residual unknowns explicitly. When the report is complete, delegate a check",
     "to the rea-auditor agent for an independent audit pass.",
   ].join(" ")
+  return appendArgs(template, args)
 }
 
 /** Register the 3 rea slash commands via ctx.command.transform. */
-export async function registerCommands(ctx: CommandCtxLike, _options: ReaOptions): Promise<void> {
+export async function registerCommands(ctx: CommandCtxLike, options: ReaOptions): Promise<void> {
   const readinessTool = READINESS_TOOL_NAME
   await ctx.command.transform((editor) => {
     editor.add({
@@ -105,7 +109,7 @@ export async function registerCommands(ctx: CommandCtxLike, _options: ReaOptions
         await ctx.session.prompt({
           ...input.prompt,
           sessionID: input.sessionID,
-          text: reaInvestigationText(userText(input)),
+          text: reaInvestigationText(userText(input), options),
           delivery: input.delivery,
         })
       },
@@ -117,7 +121,7 @@ export async function registerCommands(ctx: CommandCtxLike, _options: ReaOptions
         await ctx.session.prompt({
           ...input.prompt,
           sessionID: input.sessionID,
-          text: reaDoctorText(readinessTool),
+          text: reaDoctorText(readinessTool, options),
           delivery: input.delivery,
         })
       },
@@ -129,7 +133,7 @@ export async function registerCommands(ctx: CommandCtxLike, _options: ReaOptions
         await ctx.session.prompt({
           ...input.prompt,
           sessionID: input.sessionID,
-          text: reaReportText(),
+          text: reaReportText(userText(input)),
           delivery: input.delivery,
         })
       },

@@ -1,8 +1,8 @@
 {
   "$schema": "https://json.schemastore.org/package.json",
-  "name": "@heretek-ai/opencode-rea",
-  "version": "0.1.1",
-  "description": "opencode-rea plugin",
+  "name": "opencode-rea",
+  "version": "0.1.2",
+  "description": "OpenCode v2 plugin for REA (reverse-engineer-anything) MCP integration",
   "type": "module",
   "license": "MIT",
   "repository": {
@@ -38,7 +38,7 @@
     "@opencode/plugin": "2.0.26",
     "@opencode/sdk": "2.0.26",
     "@types/bun": "1.3.4",
-    "rea-agents": "6.4.0",
+    "rea-agents": "6.5.0",
     "typescript": "5.9.2"
   },
   "trustedDependencies": [
