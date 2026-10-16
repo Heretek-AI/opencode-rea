@@ -1,8 +1,8 @@
 # opencode-rea
 
 OpenCode v2 plugin that wires [REA](https://github.com/morluto/rea) reverse-engineering
-agents, skills, slash commands, and a readiness tool into OpenCode — on top of an
-already-registered REA MCP server.
+agents, skills, slash commands, Code Mode catalog pinning, and a readiness tool
+into OpenCode — on top of an already-registered REA MCP server.
 
 - Package: `opencode-rea`
 - Version: `0.1.0`
@@ -12,9 +12,10 @@ already-registered REA MCP server.
   local plugin directory via a root `index.js`, so a packed+extracted directory
   without it is silently never loaded)
 - Peer: `@opencode/plugin@^2` (dev: `2.0.26`; also dev: `@opencode/cli`/`@opencode/sdk`
-  `2.0.26`, `rea-agents` `6.4.0`)
+  `2.0.26`, `rea-agents` `6.5.0`)
 - Plugin id: `rea` (`src/index.ts`: `Plugin.define({ id: "rea", setup ... })`;
-  setup parses options, then registers skills, agents, readiness, commands)
+  setup parses options, then registers skills, agents, readiness + tool catalog
+  policy, and commands)
 
 Machine-checkable docs guard: `test/unit/docs.test.ts`
 (build/test rules: `AGENTS.md`).
@@ -46,10 +47,11 @@ opencode plugin add opencode-rea
 
 Configure under the plugin's options (keyed by plugin id `rea`):
 
-| Key       | Type                       | Default | Meaning                                                        |
-|-----------|----------------------------|---------|----------------------------------------------------------------|
-| `server`  | string (non-empty)     | `"rea"` | MCP server name; permission actions and tool counts use the host-sanitized namespace (`server.replace(/[^a-zA-Z0-9_-]/g, "_")` + `_<tool>`) |
-| `runtime` | `"ask"` \| `"allow"` \| `"deny"` | `"ask"` | Approval policy applied to the 21 runtime-effect tools (see Agents) |
+| Key        | Type                              | Default | Meaning |
+|------------|-----------------------------------|---------|---------|
+| `server`   | string (non-empty)                | `"rea"` | MCP server name; permission actions and tool counts use the host-sanitized namespace (`server.replace(/[^a-zA-Z0-9_-]/g, "_")` + `_<tool>`) |
+| `runtime`  | `"ask"` \| `"allow"` \| `"deny"`  | `"ask"` | Approval policy applied to the 31 runtime-effect tools (see Agents) |
+| `codemode` | `boolean` (optional)              | omitted | When explicitly set (`true` or `false`), applies `options.codemode` to all `<sanitized-server>_*` MCP tools via `ctx.tool.transform` without mutating `opencode.json` |
 
 Validation (`src/options.ts`, `parseOptions`):
 
@@ -59,44 +61,58 @@ Validation (`src/options.ts`, `parseOptions`):
   - `invalid plugin option "server": expected a string, got <typeof>`
   - empty/whitespace-only `server` fails setup: `invalid plugin option "server": expected a non-empty string, got <value>`
   - `invalid plugin option "runtime": expected one of "ask"|"allow"|"deny", got <value>`
+  - `invalid plugin option "codemode": expected a boolean, got <typeof>`
 - A non-object (e.g. an array) fails setup:
   `invalid plugin options: expected an object, got <array|typeof>`.
 
 ## Agents
 
 Source of truth: `src/agents.ts` + `agents/*.md` (registered via
-`ctx.agent.transform` `update`, which upserts; host defaults and any later
-`agents.<id>` config rules still win via last-match evaluation).
+`ctx.agent.transform` `update`, which upserts, plus a `ctx.permission.hook("evaluate", ...)`
+handler that enforces agent boundaries even when top-level `opencode.json`
+wildcard `permissions` are appended after plugin transforms by `ConfigAgentPlugin`,
+while still honoring explicit non-wildcard `agents.<id>.permissions` overrides).
 
-| Agent         | File                | Mode       | Role |
-|---------------|---------------------|------------|------|
-| `rea`         | `agents/rea.md`     | `primary`  | Lead investigator. Owns the investigation end to end: plans, runs, keeps the finding ledger, writes the final report, delegates bounded scopes to subagents. |
+| Agent         | File                    | Mode       | Role |
+|---------------|-------------------------|------------|------|
+| `rea`         | `agents/rea.md`         | `primary`  | Lead investigator. Owns the investigation end to end: plans, runs, keeps the finding ledger, writes the final report, delegates bounded scopes to subagents. |
 | `rea-analyst` | `agents/rea-analyst.md` | `subagent` | Static-only analyst. One bounded question per assignment from static evidence (bytes, addresses, strings, graph edges, saved DBs, bookmarks). |
 | `rea-runtime` | `agents/rea-runtime.md` | `subagent` | Runtime observer. Answers what static evidence cannot by observing execution within the declared target scope. |
 | `rea-auditor` | `agents/rea-auditor.md` | `subagent` | Evidence auditor. Verifies findings against the observations/inferences/unknowns discipline; verifies, never redoes. |
 
-Edit / subagent / shell / runtime-effect gating (`buildAgentPermissions`, `src/agents.ts`;
-permission actions for REA tools use the `<sanitized-server>_<tool>` shape, resource `"*"`):
+Edit / subagent / shell / runtime-effect gating (`buildAgentPermissions` and
+`evaluateAgentPermission`, `src/agents.ts`; permission actions for REA tools use
+the `<sanitized-server>_<tool>` shape, resource `"*"`):
 
-- `rea`: keeps defaults — **no** `edit`/`subagent`/`shell` denies. Only the 21
+- `rea`: keeps defaults — **no** `edit`/`subagent`/`shell` denies. Only the 31
   runtime-effect tools (`src/effects.ts`, `RUNTIME_EFFECT_TOOLS`) gate on the
   `runtime` option (`effect: options.runtime`).
-- `rea-analyst`: static-only — `edit → deny`, `subagent → deny`, `shell → deny`, **and** all 21
+- `rea-analyst`: static-only — `edit → deny`, `subagent → deny`, `shell → deny`, **and** all 31
   runtime-effect tools → `deny` regardless of the `runtime` option.
 - `rea-runtime`: no edits, no subagents, no shell (`edit → deny`, `subagent → deny`, `shell → deny`), but
   runtime-effect tools gate on the `runtime` option.
-- `rea-auditor`: read-only — `edit → deny`, `subagent → deny`, `shell → deny`, all 21
+- `rea-auditor`: read-only — `edit → deny`, `subagent → deny`, `shell → deny`, all 31
   runtime-effect tools → `deny`.
 
-The 21 runtime-effect tools (`src/effects.ts`, data-loss/device/foreign-code axis
-only) are, with `<server> = rea` shown as `rea_<tool>`: `rea_annotate_native_function`,
+The 31 runtime-effect tools (`src/effects.ts`, data-loss/device/foreign-code axis
+matching `rea-agents@6.5.0` `destructiveHint: true` 1:1) are, with `<server> = rea`
+shown as `rea_<tool>`: `rea_annotate_native_function`,
 `rea_capture_browser_scenario`, `rea_capture_electron_scenario`,
 `rea_capture_native_ui_scenario`, `rea_capture_process_scenario`, `rea_close_binary`,
-`rea_export_evidence_bundle`, `rea_install_adb_package`, `rea_observe_native_calls`,
-`rea_observe_web_execution`, `rea_push_adb_file`, `rea_set_address_name`,
+`rea_close_gdb_session`, `rea_close_rizin_debug_session`, `rea_cutter_command`,
+`rea_execute_rizin_command`, `rea_export_evidence_bundle`, `rea_gdb_console`,
+`rea_install_adb_package`, `rea_instrument_with_frida`, `rea_load_frida_script`,
+`rea_observe_native_calls`, `rea_observe_web_execution`, `rea_push_adb_file`,
+`rea_resume_frida_session`, `rea_rizin_debug_command`, `rea_set_address_name`,
 `rea_set_addresses_names`, `rea_set_bookmark`, `rea_set_comment`,
 `rea_set_inline_comment`, `rea_start_adb_activity`, `rea_start_adb_app`,
-`rea_stop_adb_app`, `rea_uninstall_adb_package`, `rea_unset_bookmark`.
+`rea_start_rizin_debug_session`, `rea_stop_adb_app`, `rea_uninstall_adb_package`,
+`rea_unset_bookmark`.
+
+Interactive debugger/Frida session lifecycle tools whose upstream annotation is
+`destructiveHint: false` are also exported in `DEBUGGER_SESSION_TOOLS`
+(`close_frida_session`, `start_frida_session`, `start_gdb_session`,
+`unload_frida_script`).
 
 ## Skills
 
@@ -105,12 +121,12 @@ Source of truth: `src/skills.ts` + `skills/*/SKILL.md` (registered via
 where `content` is the body after frontmatter and `path` is the absolute
 `SKILL.md` path so sibling references resolve).
 
-| Skill                 | File                              | When to use |
-|-----------------------|-----------------------------------|-------------|
-| `rea-opencode`        | `skills/rea-opencode/SKILL.md`     | Working with REA inside OpenCode v2: `rea_` tool names, permission actions, Code Mode `execute`/`search` fallback, `/rea:` commands, recovery. |
-| `rea-investigation`   | `skills/rea-investigation/SKILL.md` | Multi-step investigation spanning features/subsystems: staged workflow, subagent delegation, finding ledger. |
+| Skill                 | File                                  | When to use |
+|-----------------------|---------------------------------------|-------------|
+| `rea-opencode`        | `skills/rea-opencode/SKILL.md`        | Working with REA inside OpenCode v2: `rea_` tool names, permission actions, Code Mode `execute`/`search` vs `codemode: false` direct mode, compact-first views (`detail: "summary"` + `inspect_analysis_view`), `/rea:` commands, recovery. |
+| `rea-investigation`   | `skills/rea-investigation/SKILL.md`   | Multi-step investigation spanning features/subsystems: staged workflow, subagent delegation, finding ledger. |
 | `rea-evidence-report` | `skills/rea-evidence-report/SKILL.md` | Writing up findings: observations vs inferences vs unknowns, Evidence ID citations. |
-| `rea-reconstruction`  | `skills/rea-reconstruction/SKILL.md` | Turning findings into an implementation: findings→build-step mapping, observed-behavior vs design-choice separation, verification obligations. |
+| `rea-reconstruction`  | `skills/rea-reconstruction/SKILL.md`  | Turning findings into an implementation: findings→build-step mapping, observed-behavior vs design-choice separation, verification obligations. |
 
 Upstream note: the plugin does **NOT** vendor the upstream
 `reverse-engineer-anything` skill. `rea-opencode` states it does not replace that
@@ -122,11 +138,11 @@ tool reports whether `reverse-engineer-anything` is visible to the host.
 
 Source of truth: `src/commands.ts` (registered via `ctx.command.transform`).
 
-| Command      | Description |
-|--------------|-------------|
-| `/rea`       | Switch to the `rea` investigator agent and run a staged investigation (`rea-investigation` skill: scope → gather with evidence → infer only from cited evidence). |
-| `/rea-doctor`| Run the REA readiness check by calling the `rea_readiness` tool; report each item and act on the returned remediation. |
-| `/rea-report`| Produce the REA evidence report (observations vs inferences vs unknowns, every claim with its Evidence ID), then delegate a check to the `rea-auditor` agent. |
+| Command       | Description |
+|---------------|-------------|
+| `/rea`        | Switch to the `rea` investigator agent and run a staged investigation (`rea-investigation` skill: scope → gather with evidence → infer only from cited evidence). |
+| `/rea-doctor` | Run the REA readiness check by calling the `rea_readiness` tool; report each item and act on the returned remediation. |
+| `/rea-report` | Produce the REA evidence report (observations vs inferences vs unknowns, every claim with its Evidence ID), then delegate a check to the `rea-auditor` agent. |
 
 REA's six MCP prompts surface as host commands under the `rea:<prompt>` namespace
 and are **not** duplicated by this plugin (`COMMAND_IDS` contain no `":"`, so the
@@ -139,13 +155,27 @@ three slash commands never shadow them):
 - `rea:audit_residual_unknowns`
 - `rea:prepare_bounded_process_capture`
 
-## Readiness tool: `rea_readiness`
+## Readiness tool & Code Mode catalog policy: `rea_readiness`
 
 Source of truth: `src/readiness.ts` (registered via `ctx.tool.transform` as a
 native tool with `codemode: false`; read-only — no writes, no config mutation).
+During the same `ctx.tool.transform` pass, `applyReaToolCatalogPolicy`:
+
+1. Registers a namespace description (`editor.namespace({ name, description: REA_NAMESPACE_DESCRIPTION })`)
+   for OpenCode v2's Code Mode catalog.
+2. Pins the 10 primary REA entry-point tools (`PINNED_REA_TOOLS`:
+   `analyze_javascript_application`, `binary_session`, `inspect_analysis_view`,
+   `inspect_android_package`, `inspect_artifact`, `inspect_binary_layout`,
+   `inspect_managed_artifact`, `list_unknowns`, `open_binary`, `record_unknown`)
+   so OpenCode v2's 2,000-token Code Mode catalog summary always surfaces them
+   inline.
+3. Applies `options.codemode` (when explicitly configured as `true` or `false`)
+   across all `<sanitized-server>_*` MCP tools.
+
+`rea_readiness` contract:
 
 - Input: `{}` (empty struct).
-- Output: `{ server, status, statusError, reaToolCount, upstreamSkillAvailable, version, remediation }`.
+- Output: `{ server, status, statusError, reaToolCount, codemodeToolCount, directToolCount, upstreamSkillAvailable, version, remediation }`.
 - What it reports:
   - `server`: the configured server name (default `"rea"`).
   - `status` / `statusError`: live MCP status for that server from `ctx.mcp.list()`
@@ -153,6 +183,8 @@ native tool with `codemode: false`; read-only — no writes, no config mutation)
   - `reaToolCount`: number of MCP tools in `ctx.tool.list()` whose `id`/`name` starts
     with `<sanitized-server>_` (default the `rea_` count), excluding the plugin's
     own `rea_readiness` tool (0 when the MCP server is absent).
+  - `codemodeToolCount` / `directToolCount`: breakdown of those REA MCP tools by
+    whether `options.codemode` is enabled (`!== false`) or disabled (`=== false`).
   - `upstreamSkillAvailable`: whether `reverse-engineer-anything` is visible in
     `ctx.skill.list()`.
   - `version`: plugin version read from `package.json` (falls back to `"unknown"`,
@@ -160,14 +192,15 @@ native tool with `codemode: false`; read-only — no writes, no config mutation)
   - `remediation`: advice strings **only** (never executed or written by the tool):
     `rea doctor --client opencode --json` and `rea setup --client opencode --dry-run`.
 - Human summary `content`: e.g.
-  `rea_readiness: server "rea" status "connected", 170 rea_ tool(s), upstream skill available, version 0.1.0. Remediation: rea doctor --client opencode --json ; rea setup --client opencode --dry-run`.
+  `rea_readiness: server "rea" status "connected", 191 rea_ tool(s) (191 codemode, 0 direct), upstream skill available, version 0.1.0. Remediation: rea doctor --client opencode --json ; rea setup --client opencode --dry-run`.
 
 Use it via `/rea-doctor`, or call `rea_readiness` directly.
 
 ## What this plugin deliberately does NOT do
 
 - **No MCP registration or config writes.** Setup only calls `agent`/`skill`/`tool`/
-  `command` transforms plus read-only `mcp.list()`/`tool.list()`/`skill.list()`.
+  `command` transforms (and `permission.hook("evaluate", ...)` when available)
+  plus read-only `mcp.list()`/`tool.list()`/`skill.list()`.
   It never calls `ctx.mcp.transform` and never touches MCP server configuration —
   run `rea setup --client opencode` yourself (first) for that.
 - **Remediation is advice text only.** `rea_readiness` returns the strings

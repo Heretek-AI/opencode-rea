@@ -87,22 +87,30 @@ export function parseSkillFile(content: string, skillId = "unknown"): ParsedSkil
   return { name, description, body }
 }
 
-/** Register the 4 shipped rea-* skills via ctx.skill.transform. */
+/** Register the 4 shipped rea-* skills via a single batched ctx.skill.transform. */
 export async function registerSkills(ctx: SkillCtxLike, _options: ReaOptions): Promise<void> {
   const dir = resolveSkillsDir()
-  for (const id of SKILL_IDS) {
-    const path = join(dir, id, "SKILL.md")
-    let raw: string
-    try {
-      raw = await readFile(path, "utf8")
-    } catch {
-      throw new Error(`missing SKILL.md for skill "${id}" at ${path}`)
-    }
-    const parsed = parseSkillFile(raw, id)
-    await ctx.skill.transform((editor) => {
+  const loaded = await Promise.all(
+    SKILL_IDS.map(async (id) => {
+      const path = join(dir, id, "SKILL.md")
+      let raw: string
+      try {
+        raw = await readFile(path, "utf8")
+      } catch {
+        throw new Error(`missing SKILL.md for skill "${id}" at ${path}`)
+      }
+      const parsed = parseSkillFile(raw, id)
+      return { id, path, parsed }
+    }),
+  )
+  await ctx.skill.transform((editor) => {
+    for (const { id, path, parsed } of loaded) {
       // content = body after frontmatter, path = absolute SKILL.md path so
       // sibling references resolve via dirname (prior-art skill-file.ts shape).
       editor.add({ id, name: parsed.name, description: parsed.description, path, content: parsed.body })
-    })
-  }
+    }
+  })
 }
+
+/** Convention alias: the module exposes one `register` alongside `registerSkills`. */
+export const register = registerSkills

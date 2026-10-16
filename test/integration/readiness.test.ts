@@ -125,9 +125,13 @@ describe("T08 readiness via real host", () => {
         expect(VALID_STATUSES as ReadonlyArray<string>).toContain(output.status)
         expect(output.statusError === null || typeof output.statusError === "string").toBe(true)
         expect(typeof output.reaToolCount).toBe("number")
+        expect(typeof output.codemodeToolCount).toBe("number")
+        expect(typeof output.directToolCount).toBe("number")
         // MCP-only count excluding the plugin's own rea_readiness: the hermetic
         // env registers no MCP server, so this is 0 even though status may vary.
         expect(output.reaToolCount).toBe(0)
+        expect(output.codemodeToolCount).toBe(0)
+        expect(output.directToolCount).toBe(0)
         expect(typeof output.upstreamSkillAvailable).toBe("boolean")
         expect(output.version).toBe(await packageVersion())
         expect(JSON.stringify(output.remediation)).toContain(DOCTOR_CMD)
@@ -155,6 +159,8 @@ describe("T08 readiness via real host", () => {
         expect(output.statusError).toBeNull()
         // MCP-only count: rea_readiness (self) excluded, so only rea_other counts.
         expect(output.reaToolCount).toBe(1)
+        expect(output.codemodeToolCount).toBe(1)
+        expect(output.directToolCount).toBe(0)
         expect(output.upstreamSkillAvailable).toBe(true)
         expect(output.version).toBe(await packageVersion())
         expect(JSON.stringify(output.remediation)).toContain(DOCTOR_CMD)
@@ -190,6 +196,8 @@ describe("T08 readiness via real host", () => {
     expect(JSON.stringify(output.remediation)).toContain(DOCTOR_CMD)
     expect(JSON.stringify(output.remediation)).toContain(SETUP_CMD)
     expect(typeof output.reaToolCount).toBe("number")
+    expect(typeof output.codemodeToolCount).toBe("number")
+    expect(typeof output.directToolCount).toBe("number")
     expect(typeof output.upstreamSkillAvailable).toBe("boolean")
     expect(typeof output.version).toBe("string")
   })

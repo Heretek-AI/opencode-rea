@@ -1,5 +1,7 @@
 import { describe, expect, test } from "bun:test"
 import { existsSync } from "node:fs"
+import { DEBUGGER_SESSION_TOOLS, RUNTIME_EFFECT_TOOLS } from "../../src/effects.js"
+import { PINNED_REA_TOOLS } from "../../src/readiness.js"
 
 /**
  * T15 docs guard: README.md must state the release facts accurately, and
@@ -13,11 +15,13 @@ describe("T15 docs guard (README accuracy)", () => {
       version: string
       exports: unknown
       files: string[]
+      devDependencies?: Record<string, string>
     }
     // Hard-assert known release values (fail loudly on drift).
     expect(pkg.name).toBe("opencode-rea")
     expect(pkg.version).toBe("0.1.0")
     expect(pkg.exports).toEqual({ ".": "./dist/index.js" })
+    expect(pkg.devDependencies?.["rea-agents"]).toBe("6.5.0")
     for (const entry of ["dist", "skills", "agents", "index.js"]) {
       expect(pkg.files).toContain(entry)
     }
@@ -26,13 +30,14 @@ describe("T15 docs guard (README accuracy)", () => {
     // README must mention the same identity (not invented values).
     expect(readme).toContain("opencode-rea")
     expect(readme).toContain("0.1.0")
+    expect(readme).toContain("6.5.0")
     expect(readme).toContain("./dist/index.js")
     for (const entry of ["dist", "skills", "agents", "index.js"]) {
       expect(readme).toContain(entry)
     }
   })
 
-  test("every agent README names exists on disk", async () => {
+  test("every agent README names exists on disk and README lists all 31 runtime-effect tools", async () => {
     const readme = await Bun.file("README.md").text()
     const agentIds = ["rea", "rea-analyst", "rea-runtime", "rea-auditor"]
     for (const id of agentIds) {
@@ -43,6 +48,15 @@ describe("T15 docs guard (README accuracy)", () => {
     const agentsSrc = await Bun.file("src/agents.ts").text()
     for (const id of agentIds) {
       expect(agentsSrc).toContain(`"${id}"`)
+    }
+    for (const tool of RUNTIME_EFFECT_TOOLS) {
+      expect(readme).toContain(`rea_${tool.name}`)
+    }
+    for (const sessionTool of DEBUGGER_SESSION_TOOLS) {
+      expect(readme).toContain(sessionTool)
+    }
+    for (const pinnedTool of PINNED_REA_TOOLS) {
+      expect(readme).toContain(pinnedTool)
     }
   })
 
@@ -87,7 +101,7 @@ describe("T15 docs guard (README accuracy)", () => {
     const optionsSrc = await Bun.file("src/options.ts").text()
     expect(optionsSrc).toContain('"rea"') // default server
     expect(optionsSrc).toContain('"ask"') // default runtime
-    for (const token of ["server", "runtime", "ask", "allow", "deny"]) {
+    for (const token of ["server", "runtime", "codemode", "ask", "allow", "deny"]) {
       expect(readme).toContain(token)
     }
     // Unknown keys / wrong types fail setup.
@@ -97,6 +111,8 @@ describe("T15 docs guard (README accuracy)", () => {
     const readinessSrc = await Bun.file("src/readiness.ts").text()
     expect(readinessSrc).toContain("rea_readiness")
     expect(readme).toContain("rea_readiness")
+    expect(readme).toContain("codemodeToolCount")
+    expect(readme).toContain("directToolCount")
     // Remediation is advice text only.
     expect(readme).toContain("rea doctor --client opencode --json")
     expect(readme).toContain("rea setup --client opencode --dry-run")

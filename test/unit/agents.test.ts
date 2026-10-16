@@ -4,6 +4,7 @@ import { isAbsolute } from "node:path"
 import {
   AGENT_IDS,
   buildAgentPermissions,
+  evaluateAgentPermission,
   parseAgentFile,
   registerAgents,
   resolveAgentsDir,
@@ -30,6 +31,7 @@ interface CapturedAgent {
 
 function makeCaptureCtx() {
   const store = new Map<string, CapturedAgent>()
+  const hooks: Array<{ type: string; handler: (input: any) => Promise<any> }> = []
   const ctx = {
     agent: {
       transform: async (cb: (editor: { update: (id: string, fn: (a: CapturedAgent) => void) => void }) => void) => {
@@ -47,8 +49,14 @@ function makeCaptureCtx() {
         return { dispose: async () => {} }
       },
     },
+    permission: {
+      hook: async (type: string, handler: (input: any) => Promise<any>) => {
+        hooks.push({ type, handler })
+        return { dispose: async () => {} }
+      },
+    },
   }
-  return { ctx, store }
+  return { ctx, store, hooks }
 }
 
 /** Mirror of prior-art Permission.evaluate: LAST matching rule wins, wildcards both fields. */
@@ -71,14 +79,16 @@ describe("T07 agents: ids and registration", () => {
     expect([...AGENT_IDS]).toEqual([...EXPECTED_IDS])
   })
 
-  test("registerAgents upserts exactly the 4 agents with modes (rea primary, rest subagent)", async () => {
-    const { ctx, store } = makeCaptureCtx()
+  test("registerAgents upserts exactly the 4 agents with modes (rea primary, rest subagent) and registers permission evaluate hook", async () => {
+    const { ctx, store, hooks } = makeCaptureCtx()
     await registerAgents(ctx as any, { server: "rea", runtime: "ask" })
     expect([...store.keys()].sort()).toEqual([...EXPECTED_IDS].sort())
     expect(store.get("rea")?.mode).toBe("primary")
     for (const id of ["rea-analyst", "rea-runtime", "rea-auditor"] as const) {
       expect(store.get(id)?.mode).toBe("subagent")
     }
+    expect(hooks.length).toBe(1)
+    expect(hooks[0]?.type).toBe("evaluate")
   })
 
   test("each agent has id-matching name, non-empty description/system; agents dir resolves and files exist", async () => {
@@ -111,7 +121,7 @@ describe("T07 agents: ids and registration", () => {
 
 describe("T07 agents: permission matrix (agent x runtime)", () => {
   for (const runtime of ["ask", "allow", "deny"] as const) {
-    test(`rea gets 21 tool rules with effect "${runtime}" and no edit/subagent/shell denies`, () => {
+    test(`rea gets 31 tool rules with effect "${runtime}" and no edit/subagent/shell denies`, () => {
       const rules = buildAgentPermissions("rea", { server: "rea", runtime })
       expect(rules.length).toBe(RUNTIME_EFFECT_TOOLS.length)
       expect(rules.some((r) => r.action === "edit" || r.action === "subagent" || r.action === "shell")).toBe(false)
@@ -120,7 +130,7 @@ describe("T07 agents: permission matrix (agent x runtime)", () => {
       }
     })
 
-    test(`rea-analyst is static-only under runtime "${runtime}" (edit+subagent+shell deny, 21 tool denies)`, () => {
+    test(`rea-analyst is static-only under runtime "${runtime}" (edit+subagent+shell deny, 31 tool denies)`, () => {
       const rules = buildAgentPermissions("rea-analyst", { server: "rea", runtime })
       expect(rules.length).toBe(3 + RUNTIME_EFFECT_TOOLS.length)
       expect(rules[0]).toEqual({ action: "edit", resource: "*", effect: "deny" })
@@ -196,9 +206,6 @@ describe("T07 agents: rule ordering and override semantics", () => {
   })
 
   test("user-config override wins via last-write-wins (config rule appended after plugin rules)", () => {
-    // Host fact: external plugins activate before config plugins, so a
-    // user-config agents.<id> rule lands after plugin rules and wins via
-    // findLast. Proved here through direct editor semantics.
     const pluginRules = buildAgentPermissions("rea-analyst", { server: "rea", runtime: "ask" })
     expect(evaluate("rea_capture_process_scenario", "*", pluginRules)).toBe("deny")
     const withOverride: CapturedRule[] = [
@@ -206,6 +213,71 @@ describe("T07 agents: rule ordering and override semantics", () => {
       { action: "rea_capture_process_scenario", resource: "*", effect: "allow" },
     ]
     expect(evaluate("rea_capture_process_scenario", "*", withOverride)).toBe("allow")
+  })
+
+  test("evaluateAgentPermission enforces agent boundaries under global wildcard allow while honoring explicit overrides", () => {
+    const options = { server: "rea", runtime: "ask" as const }
+    const auditorRules = [
+      ...buildAgentPermissions("rea-auditor", options),
+      // Simulates OpenCode v2 ConfigAgentPlugin appending global permissions: allow-all
+      { action: "*", resource: "*", effect: "allow" as const },
+    ]
+    expect(
+      evaluateAgentPermission(
+        {
+          action: "edit",
+          resource: "/tmp/file.txt",
+          agent: "rea-auditor",
+          rules: auditorRules,
+        },
+        options,
+      ),
+    ).toEqual({ effect: "deny" })
+
+    const runtimeRules = [
+      ...buildAgentPermissions("rea-runtime", options),
+      { action: "*", resource: "*", effect: "allow" as const },
+    ]
+    expect(
+      evaluateAgentPermission(
+        {
+          action: "rea_capture_process_scenario",
+          resource: "*",
+          agent: "rea-runtime",
+          rules: runtimeRules,
+        },
+        options,
+      ),
+    ).toEqual({ effect: "ask" })
+
+    const analystWithExplicitOverride = [
+      ...buildAgentPermissions("rea-analyst", options),
+      { action: "rea_capture_process_scenario", resource: "*", effect: "allow" as const },
+      { action: "*", resource: "*", effect: "allow" as const },
+    ]
+    expect(
+      evaluateAgentPermission(
+        {
+          action: "rea_capture_process_scenario",
+          resource: "*",
+          agent: "rea-analyst",
+          rules: analystWithExplicitOverride,
+        },
+        options,
+      ),
+    ).toEqual({ effect: "allow" })
+
+    expect(
+      evaluateAgentPermission(
+        {
+          action: "edit",
+          resource: "/tmp/file.txt",
+          agent: "coder",
+          rules: [{ action: "*", resource: "*", effect: "allow" }],
+        },
+        options,
+      ),
+    ).toBeUndefined()
   })
 
   test("registered rea agent permissions equal the matrix builder output", async () => {

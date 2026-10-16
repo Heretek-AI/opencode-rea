@@ -2,7 +2,7 @@
   "$schema": "https://json.schemastore.org/package.json",
   "name": "opencode-rea",
   "version": "0.1.0",
-  "description": "opencode-rea plugin",
+  "description": "OpenCode v2 plugin for REA (reverse-engineer-anything) MCP integration",
   "type": "module",
   "license": "MIT",
   "exports": {
@@ -30,7 +30,7 @@
     "@opencode/plugin": "2.0.26",
     "@opencode/sdk": "2.0.26",
     "@types/bun": "1.3.4",
-    "rea-agents": "6.4.0",
+    "rea-agents": "6.5.0",
     "typescript": "5.9.2"
   },
   "trustedDependencies": [

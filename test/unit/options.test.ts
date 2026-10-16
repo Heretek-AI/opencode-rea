@@ -15,6 +15,12 @@ describe("T04 options boundary: parseOptions", () => {
     expect(parseOptions({ server: "custom", runtime: "allow" })).toEqual({ server: "custom", runtime: "allow" })
     expect(parseOptions({ runtime: "deny" })).toEqual({ server: "rea", runtime: "deny" })
     expect(parseOptions({ server: "x" })).toEqual({ server: "x", runtime: "ask" })
+    expect(parseOptions({ codemode: false })).toEqual({ server: "rea", runtime: "ask", codemode: false })
+    expect(parseOptions({ server: "rea", runtime: "allow", codemode: true })).toEqual({
+      server: "rea",
+      runtime: "allow",
+      codemode: true,
+    })
     expect(parseOptions({})).toEqual({ server: "rea", runtime: "ask" })
   })
 
@@ -62,6 +68,19 @@ describe("T04 options boundary: parseOptions", () => {
     expect(String((error as Error).message)).toContain("runtime")
   })
 
+  test("codemode non-boolean fails with error naming codemode", () => {
+    for (const bad of ["false", 0, "true", null, {}]) {
+      let error: unknown
+      try {
+        parseOptions({ codemode: bad })
+      } catch (e) {
+        error = e
+      }
+      expect(error).toBeInstanceOf(Error)
+      expect(String((error as Error).message)).toContain("codemode")
+    }
+  })
+
   test("non-object options fail", () => {
     for (const bad of [42, "rea", true, []]) {
       let error: unknown
@@ -100,9 +119,6 @@ describe("T04 options boundary: parseOptions", () => {
 
 describe("T04 options boundary: setup wiring", () => {
   test("setup validates ctx.options: bad options throw, defaults pass", async () => {
-    // Plugin.define preserves setup, so invoke it directly with a fake ctx.
-    // Setup also registers skills (T05), agents (T07), readiness (T08) and
-    // commands (T09), so stub skill/agent/tool/command.transform as no-ops.
     const setup = (plugin as unknown as { setup: (ctx: unknown) => Promise<unknown> }).setup
     expect(typeof setup).toBe("function")
     const withSkill = (options: unknown) => ({
@@ -114,6 +130,7 @@ describe("T04 options boundary: setup wiring", () => {
     })
     await setup(withSkill(undefined))
     await setup(withSkill({}))
+    await setup(withSkill({ codemode: false }))
     let error: unknown
     try {
       await setup(withSkill({ bogus: true }))
