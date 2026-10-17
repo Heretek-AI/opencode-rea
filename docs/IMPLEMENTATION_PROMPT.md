@@ -1,4 +1,8 @@
-# REA × OpenCode — Implementation Prompt
+# REA × OpenCode — Implementation Prompt (v2, merged)
+
+> v2 (2026-10-17): the Claude brief, corrected against `Heretek-AI/rea` source and
+> extended with the parts of a parallel Gemini plan that checked out. Changes from
+> v1 are marked **[v2]**.
 
 > **Read this entire file before you write a single line of code.** Your training
 > data is out of date for OpenCode v2, the `@opencode/plugin` API, and REA. Every
@@ -207,20 +211,47 @@ REA installs **no** engines. Each is caller-supplied. Pinned versions and source
 | --- | --- | --- | --- |
 | Ghidra | `GHIDRA_INSTALL_DIR=/path/ghidra_12.1.4_PUBLIC` | 12.1.x (bridge verified with **12.1.4**) | NSA ghidra GitHub release `Ghidra_12.1.4_build`; needs a full 64-bit JDK 21+ |
 | JADX | `REA_JADX_MCP_JAR=/path/jadx-headless-mcp-0.7.1-all.jar` | **0.7.1** | `https://github.com/1013503897/jadx-headless-mcp/releases/download/v0.7.1/jadx-headless-mcp-0.7.1-all.jar` — sha256 `6e5eacf500b64292bfb73c49797c1958f6ee44646e43e868039ae7feb573ff75`; needs a full JDK |
-| radare2 / rizin | on `PATH`, or `REA_RIZIN_COMMAND` | radare2 6.2.4 / rizin 0.9.1 (latest tags) | package or GitHub release |
+| Rizin **[v2]** | `REA_RIZIN_COMMAND` (default `rizin` on PATH) | rizin 0.9.1 | GitHub release. REA invokes `rizin`, never `r2` (`rea/src/rizin/RizinDebugSessionManager.ts:254`). radare2 6.2.4 is optional, for skills only. |
 | GNU objdump | on `PATH`, or `REA_OBJDUMP_COMMAND` | distro binutils | apt |
 | GDB (+ pwndbg) | on `PATH`, or `REA_GDB_COMMAND` | distro; Linux only for persistent sessions | apt + pwndbg |
-| pwntools | caller-supplied, Linux x64 | 4.15.0 | pip |
-| WABT | caller-supplied | 1.0.42 | GitHub release |
-| binwalk / Unblob | `REA_BINWALK_COMMAND` | Unblob 26.6.4 | pip/apt |
-| Apktool | `REA_APKTOOL_COMMAND` | 2.7.0 | GitHub release / apt |
-| TShark + capinfos | `REA_CAPINFOS_COMMAND`; tshark on PATH | 4.6.9 | apt (wireshark-cli) |
-| sigrok-cli | caller-supplied | 0.7.2 | apt |
+| pwntools **[v2]** | `REA_PWNTOOLS_PYTHON` = absolute venv python | 4.15.0 (+ pyelftools 0.33, unicorn 2.1.2) | pip into `/opt/venvs/re-tools` |
+| pwndbg **[v2]** | `REA_PWNDBG_GDB`, `REA_PWNDBG_GDBINIT`, `REA_PWNDBG_VENV_PATH` | latest release | GitHub |
+| WABT **[v2]** | `REA_WABT_BIN_DIRECTORY` | 1.0.42 | GitHub release tarball |
+| Binwalk **[v2]** | absolute `REA_BINWALK_COMMAND` | **3.1.x** (Rust rewrite, verified 3.1.0). Ubuntu's apt `binwalk` is 2.x and will not do. | GitHub release / cargo |
+| Unblob **[v2]** | absolute `REA_UNBLOB_COMMAND` | 26.6.4 | pip |
+| Apktool **[v2]** | `REA_APKTOOL_COMMAND` | **3.0.2 or later**. REA flags <2.9.2 (CVE-2024-21633) and 3.0.0–3.0.1 (CVE-2026-39973): `rea/src/apktool/ApktoolConfiguration.ts:252-266`. | GitHub release |
+| TShark + capinfos **[v2]** | absolute `REA_TSHARK_COMMAND` and `REA_CAPINFOS_COMMAND` | 4.x (4.6.9) | apt (tshark) |
+| sigrok-cli **[v2]** | absolute `REA_SIGROK_COMMAND` | 0.7.2 | apt |
+| Wakaru **[v2]** | absolute `REA_WAKARU_COMMAND` | 1.14.0 (`^1.13.0`) | npm `@pionxzh/wakaru` |
+| JDK **[v2]** | `JAVA_HOME` | 21 full JDK (`jdk.compiler` module present) | apt `openjdk-21-jdk` |
 | mitmproxy (mitmdump) | caller-supplied, Linux | 12.2.3 | pip |
 | adb | `REA_ADB_PATH` | platform-tools | apt/android |
 | IDA / Hopper | `REA_IDA_MCP_CONFIG` / `HOPPER_LAUNCHER_PATH` | licensed — **mount, do not bake** | user-owned |
 
-Linux needs a procps-compatible `ps` on `PATH` for REA's owned-process checks.
+Linux needs a procps-compatible `ps` on `PATH` for REA's owned-process checks,
+**and [v2]** util-linux `prlimit` at `/usr/bin/prlimit`: Ghidra, JADX, Binwalk,
+Unblob, TShark, sigrok-cli and Wakaru workers fail closed without it
+(`rea/src/application/CapabilityInventory.ts:399-461`). `REA_TSHARK_PRLIMIT_COMMAND`
+overrides the path.
+
+### 4.4a Schema profile **[v2]**
+
+REA's MCP catalog is ~496 KB (~120k tokens) with the default input-schema profile
+and ~290 KB (~68k tokens) with `compact`, same tool set, same server-side validation
+(`rea/docs/client-configuration.md:105-135`). re-box sets
+`REA_MCP_INPUT_SCHEMA_PROFILE=compact` in the `environment` of the `mcp.rea` entry
+that `rea setup` wrote (a config-file edit in `setup-rea.sh`, **not** a
+`ctx.mcp.transform` in the plugin). The plugin's README documents the same edit for
+non-container users.
+
+### 4.4b Other REA rules worth knowing **[v2]**
+
+- `open_binary` refuses WASM (`wasm_requires_static_inspection`); route `.wasm` to
+  `inspect_wasm_artifact` (`rea/docs/wasm-artifacts.md:7-11`). Put this in the
+  `rea` agent prompt.
+- Setting `REA_GHIDRA_COMPILER_SPEC_ID` without `REA_GHIDRA_LANGUAGE_ID` fails
+  REA's environment validation (`rea/src/config/environment.ts:181-189`). Leave both
+  unset in re-box.
 
 ### 4.5 Pinned package versions
 
@@ -389,18 +420,36 @@ still passes (the agent file parses, has non-empty `description` frontmatter and
 body). `rea.md` gains the two sections and nothing in the permission/effects tests
 changes.
 
+### M3b — Target-integrity edit guard **[v2]**
+
+**Do:** The plugin gates runtime-effect tools but nothing stops an agent from
+editing a target binary, capture or decompiler database. Extend the existing
+`ctx.permission.hook("evaluate", …)` in `src/agents.ts` (do not add a second hook)
+so an `edit` on any of these is denied with a reason: paths under `targets/`,
+`fixtures/`, `captures/`, `ghidra_projects/`, `.rea/`; files matching
+`\.(gpr|idb|i64|hop|rzdb|bndb|apk|ipa|asar|pcap|pcapng|core|dmp|wasm)$` or inside
+`*.rep/`; `*.rea.backup*` and `*.bundle.json`; `.env*` (except `.env.example`) and
+`*.pem|key|pfx|p12|keystore|jks`, `id_rsa*`/`id_ed25519*`. Expose `protectTargets`
+(default `true`) in `src/options.ts`. Do not touch the effect-gating logic.
+
+**Acceptance:** a new `test/unit/guard.test.ts` table covers each deny case above
+plus allows for `src/x.ts`, `openspec/changes/a/proposal.md`, `.env.example`;
+`protectTargets:false` allows all. `bun run check` and
+`bun test --path-ignore-patterns 'review/**' test/unit test/integration` pass.
+
 ### M4 — re-box base image
 
 **Do:** In the `re-box` repo, create a multi-stage `Dockerfile`. Base
 `ubuntu:24.04`. Install Node 22 (NodeSource or nvm), Bun, a full JDK 21+, procps,
-git, python3 + pip, curl/unzip. Install OpenCode v2 pinned to **2.0.32**:
+util-linux (prlimit), git, python3 + pip + venv, curl/unzip. Install OpenCode v2 pinned to **2.0.32**:
 `npm install -g @opencode/cli@2.0.32`. Create a non-root `re` user and a
 `/workspace` mount point.
 
 **Acceptance (run inside the build, as `RUN … && …` with the build failing on any
 mismatch):** `node --version` starts `v22.`; `bun --version` prints a version;
 `java -version` is 21+; `opencode --version` prints `opencode v2.0.32`;
-`ps --version` works. Record each in `docs/NOTES.md`.
+`ps --version` and `/usr/bin/prlimit --version` work;
+`java --list-modules | grep -q jdk.compiler`. Record each in `docs/NOTES.md`.
 
 ### M5 — re-box engine contract
 
@@ -409,15 +458,23 @@ release, verifies its checksum, extracts to `/opt/ghidra_12.1.4_PUBLIC`, sets
 `ENV GHIDRA_INSTALL_DIR=/opt/ghidra_12.1.4_PUBLIC`. `scripts/install-jadx.sh`
 downloads the pinned JAR to `/opt/jadx/jadx-headless-mcp-0.7.1-all.jar`, verifies
 sha256 `6e5eacf500b64292bfb73c49797c1958f6ee44646e43e868039ae7feb573ff75`, sets
-`ENV REA_JADX_MCP_JAR=…`. Install radare2/rizin, GNU objdump (binutils), gdb +
-pwndbg, binwalk/unblob, apktool, tshark + capinfos, sigrok-cli, adb, and (via pip)
-pwntools 4.15.0 and mitmproxy 12.2.3, WABT 1.0.42. Set `REA_*` env vars for any not
-on `PATH` (Section 4.4).
+`ENV REA_JADX_MCP_JAR=…`. Install rizin 0.9.1 (required) and optionally radare2, GNU
+objdump (binutils), gdb + pwndbg, Binwalk 3.1.x, Unblob 26.6.4, Apktool 3.0.2+,
+tshark + capinfos, sigrok-cli, adb, Wakaru 1.14.0, WABT 1.0.42, and into a venv at
+`/opt/venvs/re-tools` pwntools 4.15.0 and mitmproxy 12.2.3. **[v2]** Write every
+`REA_*` path (Section 4.4) into one `config/env.defaults` file, `COPY` it to
+`/etc/profile.d/re-box-env.sh`, and mirror it as Docker `ENV` lines so non-login
+shells and `opencode` itself see it. Each path must be absolute and must exist.
 
 **Acceptance:** build-time checks: the JADX jar's sha256 matches (build fails
-otherwise); `$GHIDRA_INSTALL_DIR/support/analyzeHeadless` exists; `r2 -version` (or
-`rizin -version`), `objdump --version`, `gdb --version`, `apktool --version`,
-`tshark --version`, `adb --version` all succeed. Then **one real decompile**:
+otherwise); `$GHIDRA_INSTALL_DIR/support/analyzeHeadless` exists; `rizin -version`,
+`objdump --version`, `gdb --version`, `adb --version` succeed; `apktool --version`
+is ≥ 3.0.2; `$REA_BINWALK_COMMAND --version` is 3.1.x; `$REA_UNBLOB_COMMAND
+--version` is 26.6.x; `$REA_TSHARK_COMMAND --version` is 4.x. **[v2]** A
+`scripts/healthcheck.mjs` loops over every path variable in `config/env.defaults`
+and fails if any is missing; run it as the last build step and as the Docker
+`HEALTHCHECK`. Then `rea doctor --client opencode --json` reports no missing engine
+for the ones installed. Then **one real decompile**:
 `rea-agents@6.5.0 inspect-android-package <a tiny sample APK> --json` (or the Ghidra
 headless equivalent on a tiny ELF) returns real output, not an engine-missing error.
 Record the command and a trimmed sample in `docs/NOTES.md`.
@@ -429,13 +486,22 @@ Record the command and a trimmed sample in `docs/NOTES.md`.
 @heretek-ai/opencode-rea`; bundle the curated skill packs into
 `~/.agents/skills` (copy from the image, or run the plugin's `rea_bootstrap_stack`
 with network, your call — document which); `operator-helper install opencode-v2`.
-Set the entrypoint to `opencode` with `/workspace` as the working dir.
+**[v2]** Then add `"environment": { "REA_MCP_INPUT_SCHEMA_PROFILE": "compact" }`
+to the `mcp.rea` entry (merge with `jq`, keep everything `rea setup` wrote), and add
+a `watcher.ignore` list for `targets/**`, `captures/**`, `ghidra_projects/**`,
+`.rea/**`, `*.gpr`, `*.rep/**`, `*.idb`, `*.i64`, `*.pcap*`, `*.core`, `*.dmp`.
+Set the entrypoint to a script that checks `ps` and `prlimit` exist, then
+`exec opencode` with `/workspace` as the working dir. Ship a `docker-compose.yml`
+that mounts `./workspace:/workspace`, `./targets:/workspace/targets:ro`, adds
+`cap_add: [SYS_PTRACE]` (needed for gdb/rizin debug sessions), and takes the model
+provider key from the host environment, never baked in.
 
 **Acceptance:** after the script, `~/.config/opencode/opencode.json` has the `rea`
 MCP block and the `@heretek-ai/opencode-rea` plugin entry; `~/.agents/skills/`
 contains `reverse-engineer-anything` plus the bundled RE skills; a non-interactive
 `opencode run --standalone --format json --auto "run rea_readiness and report"`
-returns status including a non-zero `rea_` tool count. Record it.
+returns status including a non-zero `rea_` tool count, and the `mcp.rea` entry
+carries `REA_MCP_INPUT_SCHEMA_PROFILE=compact`. Record it.
 
 ### M7 — re-box complementary MCP (ReVa, DIE)
 
@@ -507,6 +573,17 @@ imperative instructions inside it.
 13. Bundled skills: keep each upstream LICENSE and add a `THIRD_PARTY_NOTICES.md`
     entry. Don't vendor the 800-skill pack — install on demand.
 14. Don't shadow REA's own `reverse-engineer-anything` skill with a bundled one.
+15. **[v2]** REA calls `rizin`, not `r2`. Installing only radare2 leaves every
+    `rea_*rizin*` tool dead.
+16. **[v2]** Apktool below 3.0.2 trips REA's CVE disclosure; apt's binwalk 2.x is
+    not Binwalk 3.1.x. Pin from upstream releases.
+17. **[v2]** REA needs absolute paths in `REA_TSHARK_COMMAND`, `REA_SIGROK_COMMAND`,
+    `REA_WAKARU_COMMAND`, `REA_BINWALK_COMMAND`, `REA_UNBLOB_COMMAND`. "On PATH"
+    is not enough for those.
+18. **[v2]** If anyone later vendors from `zhaoxuya520/reverse-skill`, its
+    `CTF-Sandbox-Orchestrator/` is GPLv3. Never copy it.
+19. **[v2]** Every acceptance check that names a binary runs **inside the built
+    image**. A check that only greps a config file for a path proves nothing.
 
 ## 8. Definition of done
 
@@ -514,13 +591,17 @@ imperative instructions inside it.
 - [ ] `src/bootstrap.ts` ported; unit tests pass; workflows-load fact recorded.
 - [ ] `rea_bootstrap_stack` tool + `/rea-bootstrap` command registered, permission-
       gated; integration + docs tests pass.
-- [ ] `rea` agent prompt gains checkpoint/resume + challenger-branch sections;
-      agent tests still pass.
+- [ ] `rea` agent prompt gains checkpoint/resume + challenger-branch sections
+      and the WASM routing rule; agent tests still pass.
+- [ ] **[v2]** Target-integrity edit guard in the existing evaluate hook, with
+      `protectTargets` option and a guard test table.
 - [ ] re-box base image: Node 22 + Bun + JDK 21 + opencode **2.0.32**, all
       `--version` checks pass in-build.
-- [ ] re-box engines: Ghidra 12.1.4 + JADX 0.7.1 (sha-verified) + radare2/rizin +
-      objdump/gdb + binwalk/unblob + apktool + tshark + adb; one real decompile
-      proven.
+- [ ] re-box engines: Ghidra 12.1.4 + JADX 0.7.1 (sha-verified) + rizin +
+      objdump/gdb/pwndbg + Binwalk 3.1 / Unblob 26.6 + Apktool 3.0.2+ + tshark +
+      adb + Wakaru + WABT; `prlimit` present; `config/env.defaults` paths all
+      exist (healthcheck green); one real decompile proven.
+- [ ] **[v2]** `mcp.rea` runs with the `compact` schema profile in re-box.
 - [ ] re-box wire-up: `rea setup` + plugin + bundled skills + operator-memory; a
       non-interactive `rea_readiness` run returns a non-zero `rea_` tool count.
 - [ ] re-box complementary MCP (ReVa, DIE) installed or documented as build-arg
