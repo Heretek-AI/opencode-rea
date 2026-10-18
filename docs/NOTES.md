@@ -566,3 +566,66 @@ plus live hook-handler deny for an unknown agent.
       allows all.
 - [x] `bun run check` and
       `bun test --path-ignore-patterns 'review/**' test/unit test/integration` pass.
+
+## M3c — license discovery (third-party skill packs)
+
+All paths below are read-only references under `/home/john/Projects/RE/review/`;
+nothing was edited there. Commands used:
+
+```
+$ for d in reverse-skills ctf-skills reverse-engineering-assistant universal-modder reverse-skill Anthropic-Cybersecurity-Skills; do echo "-- $d"; git -C /home/john/Projects/RE/review/$d log -1 --format=%H; git -C /home/john/Projects/RE/review/$d remote get-url origin; done
+$ find <each pack> -maxdepth 2 -iname 'LICENSE*'; find review/reverse-engineering-assistant -maxdepth 3 -iname 'NOTICE*'
+$ head -5 <each LICENSE>; diff -q review/reverse-engineering-assistant/LICENSE review/reverse-engineering-assistant/ReVa/LICENSE
+```
+
+### On-demand packs (M1 `REA_SKILL_PACKS`, installed via `npx skills add`)
+
+| Pack dir | LICENSE path | First 5 lines | Commit SHA | Remote |
+| --- | --- | --- | --- | --- |
+| `review/reverse-skills` | *(none — no LICENSE file in repo)*; license declared as `MIT` in `README.md` § `## 许可证` and `README_EN.md` § `## License` | `npx skills remove rev-symbol rev-struct` / ` ``` ` / (blank) / `## 许可证` / (blank) + `MIT` | `a2baa31c58a3567977188414da68c8c842057152` | `https://github.com/p4nda0s/reverse-skills` |
+| `review/ctf-skills` | `LICENSE` | `MIT License` / (blank) / `Copyright (c) 2026 Lukasz Jagiello` / (blank) / `Permission is hereby granted, free of charge, to any person obtaining a copy` | `3bb6bad1a06664840d07b6e1e69bf19e6ca4672d` | `https://github.com/ljagiello/ctf-skills` |
+| `review/reverse-engineering-assistant` | `LICENSE` **and** `ReVa/LICENSE` (byte-identical, `diff -q` → SAME) | `Apache License` / `Version 2.0, January 2004` / `http://www.apache.org/licenses/` / (blank) / `TERMS AND CONDITIONS FOR USE, REPRODUCTION, AND DISTRIBUTION` | `a05a6b0a18649efd6d74ec8447bdadf8d468c365` | `https://github.com/cyberkaida/reverse-engineering-assistant` |
+| `review/universal-modder` | `LICENSE` | `MIT License` / (blank) / `Copyright (c) 2026 Rehan and universal-modder contributors` / (blank) / `Permission is hereby granted, free of charge, to any person obtaining a copy` | `b8675c10d7091d7e4e00a2e40a15c601040b69a8` | `https://github.com/rehan-remade/universal-modder` |
+
+### NOTICE check (Apache-2.0 ReVa)
+
+`find review/reverse-engineering-assistant -maxdepth 3 -iname 'NOTICE*'` →
+no output: **no NOTICE file exists** upstream, so there is nothing to copy.
+Recorded in `THIRD_PARTY_NOTICES.md` with the instruction to copy it if one
+appears later.
+
+### Deliberately NOT vendored
+
+- `review/reverse-skill` (`zhaoxuya520/reverse-skill`, MIT, 89 skills,
+  `cab634bd855fc287f6e420c1f36fd1a6b9245960`) and
+  `review/Anthropic-Cybersecurity-Skills`
+  (`mukul975/Anthropic-Cybersecurity-Skills`, Apache-2.0, 818 skills,
+  `54a798831d2266a3ca61ce68a7acb80b81160d57`): on demand via `npx skills add`
+  only, never vendored.
+- `review/reverse-skill/CTF-Sandbox-Orchestrator/LICENSE` first 5 lines:
+  `GNU GENERAL PUBLIC LICENSE` / `Version 3, 29 June 2007` / (blank) /
+  `Copyright (C) 2007 Free Software Foundation, Inc. <https://fsf.org/>` /
+  `Everyone is permitted to copy and distribute verbatim copies` → **GPLv3:
+  NEVER copy** (Gotcha 18).
+- IDA/Hopper: licensed, mount-or-host via `REA_IDA_MCP_CONFIG` /
+  `HOPPER_LAUNCHER_PATH`; not baked (Gotcha 11).
+
+### Thin-plugin verification (Decision 1)
+
+```
+$ ls skills/   # → rea-evidence-report rea-investigation rea-opencode rea-reconstruction (only the 4 rea-* skills)
+$ grep -ril 'reverse-engineer-anything' skills/  # → only rea-opencode/SKILL.md mentions it, as a pointer ("use that skill for target…"), not a shadow registration
+$ grep -n SKILL_IDS src/skills.ts  # → 4 ids, unchanged; no SKILL_IDS edit in this stage
+```
+
+No skill files vendored into `skills/` in this stage.
+
+### Packaging note (`package.json` `files` list)
+
+`package.json` `"files"` is `["dist", "skills", "agents", "index.js"]` — the
+new root `THIRD_PARTY_NOTICES.md` is **not** in the published tarball file
+list. Per the stage spec it stays at the repo root (as §5/§8 require); the
+publish list is left untouched so `docs.test.ts` (README/package identity)
+and the release footprint do not change. If attribution must ship inside the
+npm tarball, add `"THIRD_PARTY_NOTICES.md"` to `files` in a later stage and
+re-run the docs guard.
