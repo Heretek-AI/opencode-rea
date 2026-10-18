@@ -629,3 +629,70 @@ publish list is left untouched so `docs.test.ts` (README/package identity)
 and the release footprint do not change. If attribution must ship inside the
 npm tarball, add `"THIRD_PARTY_NOTICES.md"` to `files` in a later stage and
 re-run the docs guard.
+
+## M8 — validation pass (2026-10-18 UTC)
+
+Branch: `claude/project-thread-gnv9zf` (6 commits ahead of `origin/main`:
+`05f1eca` M0 … `0b729f4` M3c). Worktree:
+`/home/john/Projects/RE/opencode-rea/.worktrees/m0-spike` (clean —
+`git status --short` empty at validation time). Spec:
+`docs/IMPLEMENTATION_PROMPT.md` §6 M8 + §8 Definition of done (opencode-rea
+items). No code changes needed this milestone: every gate below passed on
+the as-built tree, so this entry is the only change.
+
+### Gates (exact commands + observed output)
+
+```
+$ bun run check            # tsc --noEmit -p tsconfig.json
+$ tsc --noEmit -p tsconfig.json
+(exit 0, no output)
+```
+
+```
+$ bun test --path-ignore-patterns 'review/**' test/unit test/integration
+174 pass
+0 fail
+2998 expect() calls
+Ran 174 tests across 23 files. [22.77s]
+(exit 0)
+```
+
+```
+$ bun test --path-ignore-patterns 'review/**' test/e2e/smoke.test.ts
+[live-model behaviour unverified] smoke exit: 0
+1 pass
+0 fail
+6 expect() calls
+Ran 1 test across 1 file. [2.05s]
+(exit 0)
+```
+
+### §8 Definition-of-done check (opencode-rea items)
+
+- M0 spikes re-run, observations in NOTES: yes (`docs(m0)` commit `05f1eca`,
+  §M0 entry above matches §4: `opencode v2.0.26`, smoke `1 pass`, `opencode.json`
+  `mcp.rea` block).
+- `src/bootstrap.ts` ported, unit tests pass, workflows-load fact recorded:
+  yes (M1 entry; `test/unit/bootstrap.test.ts` green inside the 174).
+- `rea_bootstrap_stack` + `/rea-bootstrap` registered, permission-gated,
+  integration + docs tests pass: yes (M2 entry; `test/integration/bootstrap.test.ts`
+  + `docs.test.ts` green inside the 174).
+- `rea` prompt gains checkpoint/resume + challenger-branch + WASM routing,
+  agent tests still pass: verified live this milestone —
+  `agents/rea.md:49 ## Checkpoint/resume`, `:59 ## Challenger branch`,
+  `:68 ## WASM routing` (routes `.wasm` to `inspect_wasm_artifact`, static
+  only, WABT 1.0.42); `test/unit/agents.test.ts` green inside the 174.
+- Target-integrity edit guard + `protectTargets` + guard table: yes (M3b entry;
+  `test/unit/guard.test.ts` green inside the 174; `protectTargets:true` default).
+- `THIRD_PARTY_NOTICES.md` lists every ported set with license + commit: yes
+  (M3c commit `0b729f4`; 4 on-demand packs, GPL `CTF-Sandbox-Orchestrator`
+  explicitly excluded, no NOTICE file upstream for ReVa).
+- `docs/NOTES.md` exists with every discovery/discrepancy: this file.
+- No PR template in this repo (`find`: no hits outside `node_modules`), so the
+  fixed §6 body format is used verbatim for the PR.
+- Gotcha re-check: no `ctx.mcp.transform` in plugin setup, no `review/`
+  edits, no `effect`/`@opencode/plugin` runtime deps, opencode-rea pin still
+  2.0.26 (only re-box moves to 2.0.32) — all hold; `bun run check` + the 174
+  would fail otherwise.
+
+No blockers. 3x-fail budget untouched (0 failures this milestone).
