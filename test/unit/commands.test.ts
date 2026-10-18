@@ -3,7 +3,7 @@ import { COMMAND_IDS, REA_PROMPT_COMMANDS, registerCommands } from "../../src/co
 
 describe("T09 unit: slash commands registration and execution", () => {
   test("COMMAND_IDS and REA_PROMPT_COMMANDS do not overlap", () => {
-    expect([...COMMAND_IDS]).toEqual(["rea", "rea-doctor", "rea-report"])
+    expect([...COMMAND_IDS]).toEqual(["rea", "rea-doctor", "rea-report", "rea-bootstrap"])
     expect(REA_PROMPT_COMMANDS).toHaveLength(6)
     for (const cmd of COMMAND_IDS) {
       expect(cmd).not.toContain(":")
@@ -11,7 +11,7 @@ describe("T09 unit: slash commands registration and execution", () => {
     }
   })
 
-  test("registerCommands wires /rea, /rea-doctor, and /rea-report with server context and user args", async () => {
+  test("registerCommands wires /rea, /rea-doctor, /rea-report, and /rea-bootstrap with server context and user args", async () => {
     const added: any[] = []
     const sessionCalls: Array<{ method: string; input: any }> = []
     const ctx: any = {
@@ -28,7 +28,7 @@ describe("T09 unit: slash commands registration and execution", () => {
     }
 
     await registerCommands(ctx, { server: "custom.rea", runtime: "ask" })
-    expect(added.map((d) => d.name)).toEqual(["rea", "rea-doctor", "rea-report"])
+    expect(added.map((d) => d.name)).toEqual(["rea", "rea-doctor", "rea-report", "rea-bootstrap"])
 
     // /rea switches to primary rea agent and passes target prompt + sanitized server namespace
     const reaCmd = added.find((d) => d.name === "rea")
@@ -55,5 +55,13 @@ describe("T09 unit: slash commands registration and execution", () => {
     expect(sessionCalls.some((c) => c.method === "switchAgent")).toBe(false)
     expect(sessionCalls[0]?.input?.text).toContain("rea-auditor")
     expect(sessionCalls[0]?.input?.text).toContain("focus on TLS pinning")
+
+    // /rea-bootstrap tells the agent to call rea_bootstrap_stack then rea_readiness and report
+    sessionCalls.length = 0
+    const bootstrapCmd = added.find((d) => d.name === "rea-bootstrap")
+    await bootstrapCmd.execute({ sessionID: "s4", prompt: { text: "" }, delivery: undefined })
+    expect(sessionCalls.some((c) => c.method === "switchAgent")).toBe(false)
+    expect(sessionCalls[0]?.input?.text).toContain("rea_bootstrap_stack")
+    expect(sessionCalls[0]?.input?.text).toContain("rea_readiness")
   })
 })

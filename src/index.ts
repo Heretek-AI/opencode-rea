@@ -1,9 +1,21 @@
 import { Plugin } from "@opencode/plugin"
 import { registerAgents } from "./agents.js"
+import { registerBootstrapTool } from "./bootstrap-tool.js"
 import { registerCommands } from "./commands.js"
 import { parseOptions } from "./options.js"
 import { registerReadiness } from "./readiness.js"
 import { registerSkills } from "./skills.js"
+
+export {
+  BOOTSTRAP_PERMISSION_ACTION,
+  BOOTSTRAP_TOOL_NAME,
+  BootstrapToolInputSchema,
+  readPermissionAssert,
+  registerBootstrapTool,
+  withWorkflowsFallbackNote,
+  type BootstrapToolCallContext,
+  type BootstrapToolInput,
+} from "./bootstrap-tool.js"
 
 export {
   AGENT_IDS,
@@ -68,6 +80,7 @@ export default Plugin.define({
     await registerSkills(ctx as any, options)
     await registerAgents(ctx as any, options)
     await registerReadiness(ctx as any, options)
+    await registerBootstrapTool(ctx as any)
     await registerCommands(ctx as any, options)
   },
 })

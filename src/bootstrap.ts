@@ -27,6 +27,9 @@ export interface StepResult {
   detail: string
 }
 
+/** Label of the workflows install step (guarded by a version-probe `skip`; see docs/NOTES.md D5). */
+export const WORKFLOWS_STEP_LABEL = "OpenCode Workflows plugin"
+
 /** MIT/Apache-2.0 skill packs installed via `npx skills add`. */
 export const REA_SKILL_PACKS: ReadonlyArray<{ label: string; repo: string }> = [
   { label: "p4nda0s/reverse-skills", repo: "p4nda0s/reverse-skills" },
@@ -91,7 +94,7 @@ export function reaBootstrapSteps(cwd: string, o: BootstrapOptions = {}): Bootst
   }
   if (o.installWorkflows ?? true) {
     steps.push({
-      label: "OpenCode Workflows plugin",
+      label: WORKFLOWS_STEP_LABEL,
       command: "opencode",
       args: ["plugin", "add", "@rphang/opencode-workflows"],
       skip: () => workflowsSkipReason(),

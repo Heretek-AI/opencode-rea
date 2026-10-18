@@ -322,3 +322,136 @@ Root-cause chain (all paths inside the scratch cache):
       `formatResults` renders `[OK]`/`[FAILED]`/`[SKIPPED]`.
 - [x] `bun test --path-ignore-patterns 'review/**' test/unit/bootstrap.test.ts` → all pass (9/9).
 - [x] Workflows-load fact verified in `/tmp` scratch and recorded here (D5: fails on 2.0.32, loads on pinned 2.0.15; fallback = REA subagent delegation, build not blocked).
+
+---
+
+# M2 — `rea_bootstrap_stack` tool + `/rea-bootstrap` command discovery log
+
+Date: 2026-10-18 (UTC). Branch: `claude/project-thread-gnv9zf`.
+Worktree: `/home/john/Projects/RE/opencode-rea/.worktrees/m0-spike`.
+Spec: `docs/IMPLEMENTATION_PROMPT.md` §6 M2 + §4.1 (tool transform editor
+shapes, permission assert), §7, §5 layout. CLI pin stays 2.0.26 (no bump).
+
+## M2.1 — `ctx.permission.assert` availability probe (new discrepancy D6)
+
+§4.1/§6-M2 say to call `ctx.permission.assert(...)` before running, citing
+`unity.gamedev.kit/src/v2.ts`. But `@opencode/plugin@2.0.26` types declare no
+`assert`: `dist/promise/permission.d.ts` is
+`Pick<PermissionApi, "list" | "get" | "reply"> & { hook }`, and the bundled
+`@opencode/client@2.0.26` generated permission API has only
+`request/saved/create/list/get/reply` — no `assert` anywhere in the package.
+The Unity kit targets `@opencode/plugin@2.0.32`, so the reference may postdate
+our pin. Verified empirically with a scratch probe plugin (tool returning
+`typeof ctx.permission.assert` + `Object.keys(ctx.permission)`, driven by the
+real CLI + fixture model, scratch deleted afterwards):
+
+- 2.0.26 (`node_modules/.bin/opencode`, `opencode v2.0.26`):
+  `{"typeofAssert":"undefined","permissionKeys":["hook","list","get","reply"]}`
+- 2.0.32 (`/tmp/opencode/wf-check/node_modules/.bin/opencode`, `opencode v2.0.32`):
+  `{"typeofAssert":"function","permissionKeys":["hook","list","get","reply","assert"]}`
+
+## Discrepancy vs Section 4 (new)
+
+- **D6 — `permission.assert` does not exist on the pinned 2.0.26 host; it was
+  added by 2.0.32.** Calling it unconditionally would throw
+  `TypeError: not a function` at runtime on our pin. Design (fail-closed per
+  Agency rules): `src/bootstrap-tool.ts` `readPermissionAssert()` calls the
+  host capability when present and otherwise throws a descriptive error
+  refusing to run installs without approval. Nothing proceeds unapproved on
+  any host. re-box (2.0.32) gates normally. Build not blocked.
+
+## M2.2 — implementation
+
+File placement: new `src/bootstrap-tool.ts` (thin; reuses the M1 runner —
+no `node:fs`/`node:path`, no new runtime deps, no `ctx.mcp.transform`).
+`src/index.ts` `setup()` registers it after readiness; `src/commands.ts`
+gains `/rea-bootstrap`; `src/readiness.ts` + `src/bootstrap.ts` adjusted
+(see below). Exports added to `src/index.ts` for tests/docs-guard.
+
+- Tool registration mirrors `gamedev_bootstrap_stack`:
+  `editor.add({ name: "rea_bootstrap_stack", input: { installSkills?,
+  installMemory?, installWorkflows? } booleans, additionalProperties: false,
+  options: { codemode: false } })`. `execute` calls `readPermissionAssert`
+  with `{ sessionID, agent, source: { type: "tool", messageID, id }, action:
+  "rea_bootstrap_stack", resources: [directory], save: ["*"] }` **before**
+  `runBootstrap(...)` with `onStep` wired to `context.progress`, then
+  `await ctx.skill.reload()`. Returns `{ content, metadata: { results } }`.
+- D5 (workflows failure non-fatal): `runBootstrap` already records step
+  failures instead of throwing; the tool additionally appends an explicit
+  fallback note via `withWorkflowsFallbackNote()` when the workflows step is
+  not `ok` ("bounded fan-out falls back to REA's own subagent delegation").
+  New shared const `WORKFLOWS_STEP_LABEL` in `src/bootstrap.ts` (value
+  unchanged, M1 unit assertions untouched).
+- New-tool fallout in `src/readiness.ts`: the plugin's own
+  `rea_bootstrap_stack` matches the `rea_` prefix, so without an exclusion it
+  would inflate the MCP-only `reaToolCount` (T08/T10 hermetic `0` broke: got
+  1) and a global `codemode` option would clobber its direct mode. Added
+  `PLUGIN_OWN_TOOL_NAMES = { rea_readiness, rea_bootstrap_stack }` skipping it
+  in `countReaToolsByMode` and in the `applyReaToolCatalogPolicy` codemode
+  loop. `test/unit/readiness.test.ts` extended with a bootstrap entry (counts
+  unchanged).
+- `/rea-bootstrap` (`COMMAND_IDS` + definition): prompt tells the agent to
+  call `rea_bootstrap_stack` (passing requested flags), then `rea_readiness`,
+  and report per-step results + readiness summary + the workflows-fallback
+  note when applicable. No agent switch. `test/unit/commands.test.ts` and
+  `test/integration/commands.test.ts` exact lists updated to the four
+  commands; `test/unit/options.test.ts` setup stub gains the host-guaranteed
+  `location` (unity kit relies on `ctx.location.directory` too).
+- Docs: `README.md` gains a `/rea-bootstrap` row ("three" → "four") and a
+  "Bootstrap tool: `rea_bootstrap_stack`" section (flags, permission gate +
+  D6 host note, workflows non-fatal + D5 note, `codemode: false`,
+  `{ content, metadata: { results } }`, `ctx.skill.reload()`).
+  `test/unit/docs.test.ts` extended: `"rea-bootstrap"` in the command-id
+  loop + a dedicated test asserting README tokens and `src/bootstrap-tool.ts`
+  markers (`permission.assert`, `ctx.skill.reload`, `runBootstrap`,
+  `codemode`).
+
+## M2.3 — live gating evidence (real hosts, built plugin, scratch tests deleted)
+
+Zero-step calls (`installSkills/installMemory/installWorkflows: false`, so no
+command ever runs) driven by the real CLI + fixture model:
+
+- 2.0.26 + `--auto`: `tool_use` `status: "error"`,
+  `error: "rea_bootstrap_stack: host permission.assert is unavailable —
+  refusing to run installs without approval. ..."` — fail-closed, exit 0.
+- 2.0.32 + `--auto`: `tool_use` `status: "completed"`,
+  `metadata: { results: [], ... }`, `output: ""` — host `assert` approved the
+  call end to end.
+- 2.0.32 without `--auto`: `status: "completed"` as well (standalone-run
+  host policy auto-resolves the programmatic assert; the user-facing denial
+  path — assert rejects → execute rejects before any install — is proven
+  deterministically in `test/integration/bootstrap.test.ts` via an injected
+  rejecting assert, plus the D6 fail-closed path via an assert-less host).
+  Recorded as observed; host approval policy is not this plugin's logic.
+
+## M2.4 — test evidence
+
+```
+$ bun run check   # tsc --noEmit -p tsconfig.json → exit 0
+$ bun run build   # tsc -p tsconfig.build.json → exit 0
+$ bun test --path-ignore-patterns 'review/**' test/unit test/integration
+126 pass, 0 fail, 2737 expect() calls, 22 files
+```
+
+Includes new `test/integration/bootstrap.test.ts` (6 tests: tool listed
+after `setup()` with `codemode: false` + closed boolean schema; denial
+rejects with exact assert shape `{ action: "rea_bootstrap_stack",
+resources: [directory], save: ["*"] }` and no reload; approved all-false run
+returns `metadata.results: []` + one `skill.reload()`; assert-less host
+refuses via `/permission\.assert/`; D5 note only on non-ok workflows;
+`COMMAND_IDS` contains `rea-bootstrap`, no `":"`, command prompt names both
+tools).
+
+## M2 acceptance verdict
+
+- [x] `test/integration/bootstrap.test.ts`: after `setup()`,
+      `ctx.tool.list()` includes `rea_bootstrap_stack`; calling it without
+      approval is rejected (permission asserted with the exact spec shape);
+      `COMMAND_IDS` includes `rea-bootstrap` and contains no `":"`.
+- [x] `bun run check` passes.
+      `bun test --path-ignore-patterns 'review/**' test/unit test/integration`
+      → all pass (126/126).
+- [x] `docs.test.ts` (extended) confirms README documents the new tool and
+      command (fails without the README section).
+- [x] Workflows failure handled non-fatal (D5 note helper + unit-covered;
+      step failures never throw out of `runBootstrap`).

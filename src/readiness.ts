@@ -1,6 +1,7 @@
 import { readFile } from "node:fs/promises"
 import { dirname, join } from "node:path"
 import { fileURLToPath } from "node:url"
+import { BOOTSTRAP_TOOL_NAME } from "./bootstrap-tool.js"
 import type { ReaOptions } from "./options.js"
 import { sanitizeServerNamespace } from "./options.js"
 
@@ -31,6 +32,15 @@ export type PinnedReaToolName = (typeof PINNED_REA_TOOLS)[number]
 
 export const REA_NAMESPACE_DESCRIPTION =
   "REA reverse-engineering analysis, artifact inspection, version comparison, and runtime observation tools."
+
+/**
+ * Native tools owned by this plugin rather than the MCP server. They share
+ * the `<sanitized-server>_` prefix, so the rea_ counters and the codemode
+ * override loop must skip them explicitly (otherwise the hermetic count is
+ * wrong and a global `codemode` option would clobber the plugin's own
+ * direct-mode tools).
+ */
+const PLUGIN_OWN_TOOL_NAMES: ReadonlySet<string> = new Set([READINESS_TOOL_NAME, BOOTSTRAP_TOOL_NAME])
 
 export interface ReadinessOutput {
   readonly server: string
@@ -162,7 +172,7 @@ export interface ReaToolCounts {
 export function countReaToolsByMode(toolListResult: unknown, server: string): ReaToolCounts {
   // Effective names carry the `<sanitized-server>_` prefix (default server is "rea", so
   // this is the rea_ count). Entries expose `id` and/or `name`; check both.
-  // The plugin's own readiness tool matches the default prefix, so exclude it:
+  // The plugin's own native tools match the default prefix, so exclude them:
   // the count reflects MCP-server tools only (0 when the server is absent).
   const prefix = `${sanitizeServerNamespace(server)}_`
   const entries: Array<any> = Array.isArray(toolListResult)
@@ -176,7 +186,7 @@ export function countReaToolsByMode(toolListResult: unknown, server: string): Re
   for (const entry of entries) {
     const id = typeof entry?.id === "string" ? (entry.id as string) : ""
     const name = typeof entry?.name === "string" ? (entry.name as string) : ""
-    if (id === READINESS_TOOL_NAME || name === READINESS_TOOL_NAME) continue
+    if (PLUGIN_OWN_TOOL_NAMES.has(id) || PLUGIN_OWN_TOOL_NAMES.has(name)) continue
     if (id.startsWith(prefix) || name.startsWith(prefix)) {
       reaToolCount++
       if (entry?.options?.codemode === false) directToolCount++
@@ -248,7 +258,7 @@ export function applyReaToolCatalogPolicy(tools: ToolEditorLike, options: ReaOpt
             : typeof entry?.name === "string"
               ? (entry.name as string)
               : ""
-        if (!id.startsWith(prefix) || id === READINESS_TOOL_NAME || pinnedIds.has(id)) continue
+        if (!id.startsWith(prefix) || PLUGIN_OWN_TOOL_NAMES.has(id) || pinnedIds.has(id)) continue
         tools.update(id, (tool) => {
           tool.options = {
             ...(tool.options ?? {}),

@@ -85,7 +85,7 @@ describe("T09 commands via real host", () => {
   }, 60_000)
 
   test("COMMAND_IDS exact; no shadowing of rea:<prompt> commands", () => {
-    expect([...COMMAND_IDS]).toEqual(["rea", "rea-doctor", "rea-report"])
+    expect([...COMMAND_IDS]).toEqual(["rea", "rea-doctor", "rea-report", "rea-bootstrap"])
     expect(REA_PROMPT_COMMANDS).toHaveLength(6)
     for (const name of COMMAND_IDS) {
       expect(name).not.toContain(":")
@@ -111,7 +111,7 @@ async function collectDefinitions(options: { server: string; runtime: "ask" | "a
 
 async function assertDirectRegistration() {
   const added = await collectDefinitions({ server: "rea", runtime: "ask" })
-  expect(added.map((d) => d.name)).toEqual(["rea", "rea-doctor", "rea-report"])
+  expect(added.map((d) => d.name)).toEqual(["rea", "rea-doctor", "rea-report", "rea-bootstrap"])
   for (const d of added) {
     expect(typeof d.description).toBe("string")
     expect((d.description ?? "").length).toBeGreaterThan(0)

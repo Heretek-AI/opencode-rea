@@ -11,11 +11,13 @@ import {
   countReaToolsByMode,
   registerReadiness,
 } from "../../src/readiness.js"
+import { BOOTSTRAP_TOOL_NAME } from "../../src/bootstrap-tool.js"
 
 describe("T08 unit: readiness & Code Mode tool catalog policy", () => {
-  test("countReaMcpTools and countReaToolsByMode count MCP tools while excluding rea_readiness", () => {
+  test("countReaMcpTools and countReaToolsByMode count MCP tools while excluding plugin-owned tools", () => {
     const tools = [
       { id: READINESS_TOOL_NAME, name: READINESS_TOOL_NAME, options: { codemode: false } },
+      { id: BOOTSTRAP_TOOL_NAME, name: BOOTSTRAP_TOOL_NAME, options: { codemode: false } },
       { id: "rea_binary_session", name: "rea_binary_session", options: { codemode: true, pinned: true } },
       { id: "rea_inspect_artifact", name: "rea_inspect_artifact", options: {} },
       { id: "rea_read_native_function", name: "rea_read_native_function", options: { codemode: false } },

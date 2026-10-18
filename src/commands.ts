@@ -1,8 +1,9 @@
 import type { ReaOptions } from "./options.js"
 import { sanitizeServerNamespace } from "./options.js"
+import { BOOTSTRAP_TOOL_NAME } from "./bootstrap-tool.js"
 import { READINESS_TOOL_NAME } from "./readiness.js"
 
-export const COMMAND_IDS = ["rea", "rea-doctor", "rea-report"] as const
+export const COMMAND_IDS = ["rea", "rea-doctor", "rea-report", "rea-bootstrap"] as const
 
 export type CommandId = (typeof COMMAND_IDS)[number]
 
@@ -22,7 +23,7 @@ export type ReaPromptBaseName = (typeof REA_PROMPT_BASE_NAMES)[number]
 export const REA_PROMPT_COMMANDS = REA_PROMPT_BASE_NAMES.map((name) => `rea:${name}` as const)
 
 // Invariant: none of COMMAND_IDS contains ":" and none equals any of
-// REA_PROMPT_COMMANDS, so the three slash commands never shadow or duplicate
+// REA_PROMPT_COMMANDS, so the four slash commands never shadow or duplicate
 // the six `rea:<prompt>` MCP prompt commands.
 
 export interface CommandPromptLike {
@@ -97,7 +98,16 @@ function reaReportText(args: string): string {
   return appendArgs(template, args)
 }
 
-/** Register the 3 rea slash commands via ctx.command.transform. */
+function reaBootstrapText(args: string): string {
+  const template = [
+    `Install the REA reverse-engineering stack by calling the ${BOOTSTRAP_TOOL_NAME} tool (passing through any requested installSkills/installMemory/installWorkflows flags), then call the ${READINESS_TOOL_NAME} tool to verify the installation.`,
+    "Report what installed: the per-step results from the bootstrap tool ([OK] / [FAILED] / [SKIPPED] lines) plus the readiness summary (server status, tool counts, skill availability, version).",
+    "If the workflows step did not complete, note that bounded fan-out falls back to REA's own subagent delegation.",
+  ].join(" ")
+  return appendArgs(template, args)
+}
+
+/** Register the 4 rea slash commands via ctx.command.transform. */
 export async function registerCommands(ctx: CommandCtxLike, options: ReaOptions): Promise<void> {
   const readinessTool = READINESS_TOOL_NAME
   await ctx.command.transform((editor) => {
@@ -134,6 +144,18 @@ export async function registerCommands(ctx: CommandCtxLike, options: ReaOptions)
           ...input.prompt,
           sessionID: input.sessionID,
           text: reaReportText(userText(input)),
+          delivery: input.delivery,
+        })
+      },
+    })
+    editor.add({
+      name: "rea-bootstrap",
+      description: "Install the REA reverse-engineering stack, verify with rea_readiness, and report what installed",
+      execute: async (input) => {
+        await ctx.session.prompt({
+          ...input.prompt,
+          sessionID: input.sessionID,
+          text: reaBootstrapText(userText(input)),
           delivery: input.delivery,
         })
       },

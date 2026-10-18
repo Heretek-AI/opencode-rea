@@ -123,6 +123,7 @@ describe("T04 options boundary: setup wiring", () => {
     expect(typeof setup).toBe("function")
     const withSkill = (options: unknown) => ({
       options,
+      location: { directory: process.cwd() },
       skill: { transform: async () => ({ dispose: async () => {} }) },
       agent: { transform: async () => ({ dispose: async () => {} }) },
       tool: { transform: async () => ({ dispose: async () => {} }) },
