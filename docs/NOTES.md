@@ -154,3 +154,171 @@ no new code was written.
 - [x] Both observations written here in `docs/NOTES.md`; discrepancies D1–D4
       reconciled against §4 above (D1 against the §4.4 Node range + doctor
       evidence). No stop-and-reconcile blocker: nothing contradicts §4.
+
+---
+
+# M1 — Bootstrap runner discovery log
+
+Date: 2026-10-17/18 (UTC 2026-10-18 ~00:0x). Branch: `claude/project-thread-gnv9zf`.
+Worktree: `/home/john/Projects/RE/opencode-rea/.worktrees/m0-spike`.
+Spec: `docs/IMPLEMENTATION_PROMPT.md` §6 M1.
+
+## M1.1 — `src/bootstrap.ts` port
+
+Ported from `unity.gamedev.kit/src/bootstrap.ts` (read in full) + `src/v2.ts`
+(tool-registration shape, reference only — M1 adds no tool yet) +
+`src/shared.ts` (SKILL_PACKS shape reference; REA packs defined fresh, no
+Unity packs copied). Only `node:child_process` (`spawn`, `spawnSync`),
+no `node:fs`/`node:path` use needed (`void cwd` keeps the `reaBootstrapSteps`
+signature honest without fake filesystem probes). No new runtime dependencies
+(`package.json` untouched; `@opencode/plugin` stays peer+dev).
+
+Exact spec signatures implemented verbatim (`src/bootstrap.ts`):
+
+- `BootstrapOptions { installSkills?; installMemory?; installWorkflows? }`
+- `StepResult { label; status: "ok"|"failed"|"skipped"; detail }`
+- `BootstrapStep { label, command, args, skip? }` (skip returns reason or undefined)
+- `reaBootstrapSteps(cwd, o?)`, `runCommand(command, args, {cwd, signal?, timeoutMs?})`,
+  `runBootstrap(cwd, o?, {signal?, onStep?})`, `formatResults(results)`
+
+Step labels in exact order (asserted in test):
+
+1. `Skill pack p4nda0s/reverse-skills` — `npx -y skills@latest add p4nda0s/reverse-skills --agent opencode --yes`
+2. `Skill pack ljagiello/ctf-skills` — same shape
+3. `Skill pack cyberkaida/reverse-engineering-assistant` — same shape
+4. `Skill pack rehan-remade/universal-modder` — same shape
+5. `Operator Helper CLI` — `npm install --global @aerovato/operator-helper@latest`
+6. `Operator Helper for OpenCode V2` — `operator-helper install opencode-v2`
+7. `OpenCode Workflows plugin` — `opencode plugin add @rphang/opencode-workflows`
+   with a `skip` guard (`workflowsSkipReason()`, exported): probes
+   `opencode --version` via `spawnSync` (15 s timeout, Windows shell parity);
+   returns a skip reason when the CLI is missing/unparseable (fail closed —
+   no doomed install). A parseable version proceeds; sandbox-level
+   incompatibility then surfaces as a step failure (see M1.3).
+
+`runCommand` parity with the Unity kit: no TTY (`stdio: ignore/pipe/pipe`),
+`CI=1 NO_COLOR=1 FORCE_COLOR=0`, Windows `.cmd` shim quoting + `shell: true`,
+300 s default timeout, output tailed to ~1500 bytes (buffer capped at
+`TAIL*4` during collection). `runBootstrap` checks `signal.throwIfAborted()`
+per step, honors `skip`, wires `onStep(label, i, total)`, records
+`$ cmd args` + tail in `detail`, and rethrows on abort. `formatResults`
+renders `[OK]`/`[FAILED]`/`[SKIPPED]` summary lines plus a `Failure output:`
+section (failures only; skipped reasons stay on the summary line).
+
+## M1.2 — unit tests
+
+`test/unit/bootstrap.test.ts` (9 tests), run as:
+
+```
+$ bun test --path-ignore-patterns 'review/**' test/unit/bootstrap.test.ts
+bun test v1.4.2 (744846f84)
+ 9 pass
+ 0 fail
+ 32 expect() calls
+Ran 9 tests across 1 file. [167.00ms]
+```
+
+Covers the three acceptance assertions (exact labels in order;
+`installSkills:false` drops exactly the four skill steps; `formatResults`
+renders `[OK]`/`[FAILED]`/`[SKIPPED]`) plus: exact pack commands, the
+workflows `skip` presence, `installMemory:false`/`installWorkflows:false`
+drops, failure-append vs clean-summary `formatResults` shapes, `runCommand`
+exit-code/output capture and tail bound, and `runBootstrap`
+all-disabled → `[]` (no network touched — the only `runCommand` tests use
+local `echo`/`node -e`).
+
+```
+$ bun run check   # tsc --noEmit -p tsconfig.json → exit 0
+$ bun run build   # tsc -p tsconfig.build.json → exit 0 (dist/index.js emitted)
+```
+
+## M1.3 — workflows-load fact (Not-verified item 1): FAILS on 2.0.32
+
+Question: does `@rphang/opencode-workflows` (upstream pinned to opencode
+2.0.15) load and run under `@opencode/cli@2.0.32`? Answer: **NO — it fails
+to load on 2.0.32; it loads on its pinned 2.0.15.** All scratch work in
+`/tmp/opencode/wf-check` (2.0.32) and `/tmp/opencode/wf-2015` (2.0.15
+control); the repo and the real `~/.config/opencode/opencode.json` were
+never touched (`grep -c rphang ~/.config/opencode/opencode.json` → `0`).
+
+Registry facts:
+
+```
+$ npm view @rphang/opencode-workflows version dist-tags
+version = '0.2.0'          # latest; only releases are 0.1.0, 0.2.0 — no newer fix exists
+$ npm view @rphang/opencode-workflows dependencies peerDependencies engines
+dependencies = { ajv, acorn, effect: '4.0.0-rc.112', '@opencode/codemode': '2.0.15' }
+peerDependencies = { '@opencode/plugin': '2.0.15' }
+engines = { opencode: '2.0.15' }
+```
+
+Install step (the exact M1 bootstrap command) works on both CLIs, fully
+isolated (`HOME`/`XDG_*`/`OPENCODE_CONFIG_DIR` under the scratch dir):
+
+```
+$ ./node_modules/.bin/opencode --version
+opencode v2.0.32
+$ ./node_modules/.bin/opencode plugin add @rphang/opencode-workflows
+Plugin "@rphang/opencode-workflows" installed and added to /tmp/opencode/wf-check/config/opencode.json
+EXIT=0
+```
+
+(The package lands in `<cache>/opencode/npm/@rphang/opencode-workflows@latest/<ts>/node_modules/…`.)
+
+Load probe: minimal loopback OpenAI-compatible fixture (`fixture.mjs`,
+answers title probes + one text line) + `opencode run --standalone
+--format json --auto --print-logs --model fixture-test/fixture-model`.
+
+2.0.32 result — plugin REFUSED by the host sandbox:
+
+```
+timestamp=... level=WARN ... message="failed to load plugin" target=@rphang/opencode-workflows
+  cause="Cause([Die(Error: Cannot load \"effect/dist/unstable/http/index.js\"
+  from plugin node_modules: \"effect/dist/unstable/http/index.js\" is not
+  provided by OpenCode; plugins must use the host's \"effect\" and
+  \"@opencode/plugin\" modules.)])" role=server
+```
+
+2.0.15 control — plugin LOADS (same probe shape, provider block rewritten
+to the 2.0.15 `provider:` schema after a `configuration normalization
+diagnostic … kind=invalid` told us `providers:`+`settings:` is rejected there):
+
+```
+$ grep -c "failed to load plugin" run-stderr2.log
+0
+$ grep -c "WORKFLOWS-LOAD-PROBE-OK" run-stdout2.jsonl
+11
+```
+
+(`EXIT=1` on both runs is a fixture artifact, not a product signal: the
+minimal fixture omits `finish_reason` on the terminal stream chunk, so the
+host reports `provider.invalid-output … stream ended without finish_reason`
+*after* delivering the model text. The repo's `test/support/model-fixture.ts`
+emits the finish chunk correctly; the scratch fixture was throwaway.)
+
+Root-cause chain (all paths inside the scratch cache):
+
+- `@rphang/opencode-workflows@0.2.0/dist/index.js` → bundled
+  `@opencode/codemode@2.0.15` → `dist/openapi/{runtime,types,index}.js`
+  contain `import { HttpClient[,…] } from "effect/unstable/http"`.
+- The 2.0.32 plugin sandbox does not provide that `effect` subpath, so the
+  plugin dies at load. The 2.0.15 host provides it (pinned peer), so it loads.
+
+## Discrepancy vs Section 4 (new)
+
+- **D5 — Not-verified item 1 resolves NEGATIVE.** `@rphang/opencode-workflows`
+  does not load under `@opencode/cli@2.0.32` (sandbox rejects its bundled
+  `effect/dist/unstable/http` via `@opencode/codemode@2.0.15`; no newer
+  plugin release exists). Per §6 M1 / §7.6: **fall back to REA's own
+  subagent delegation for bounded fan-out; do not depend on (or block the
+  build on) opencode-workflows.** The `OpenCode Workflows plugin` bootstrap
+  step stays (guarded by its version-probe `skip`), and M2 must treat a
+  workflows-install failure as non-fatal. Nothing else in §4 changes.
+
+## M1 acceptance verdict
+
+- [x] `test/unit/bootstrap.test.ts` asserts exact labels in order,
+      `installSkills:false` drops the four skill steps,
+      `formatResults` renders `[OK]`/`[FAILED]`/`[SKIPPED]`.
+- [x] `bun test --path-ignore-patterns 'review/**' test/unit/bootstrap.test.ts` → all pass (9/9).
+- [x] Workflows-load fact verified in `/tmp` scratch and recorded here (D5: fails on 2.0.32, loads on pinned 2.0.15; fallback = REA subagent delegation, build not blocked).
