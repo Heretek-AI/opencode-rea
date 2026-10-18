@@ -503,3 +503,66 @@ $ bun test --path-ignore-patterns 'review/**' test/unit/docs.test.ts
 - [x] `rea.md` gains checkpoint/resume + challenger-branch sections and the
       WASM routing rule.
 - [x] Permission/effects tests unchanged (no `src/` edits).
+
+---
+
+# M3b — Target-integrity edit guard discovery log
+
+Date: 2026-10-18 (UTC). Branch: `claude/project-thread-gnv9zf`.
+Worktree: `/home/john/Projects/RE/opencode-rea/.worktrees/m0-spike`.
+Spec: `docs/IMPLEMENTATION_PROMPT.md` §6 M3b (exact deny list) + §7 + §8.
+
+## M3b.1 — implementation (no second hook, effect-gating untouched)
+
+- `src/options.ts`: exposed `protectTargets?: boolean` (default `true`).
+  `KNOWN_KEYS` gains `"protectTargets"`; non-boolean fails with
+  `invalid plugin option "protectTargets"`; `parseOptions(undefined|null|{})`
+  returns `protectTargets: true`. Guard checks `options.protectTargets !== false`,
+  so `undefined` (older callers) stays enabled — fail closed.
+- `src/agents.ts`: added `getProtectedTargetReason()` /
+  `isProtectedTargetPath()` + `findProtectedTargetResource()` (checks both
+  `event.resource` and `event.resources[]`). `evaluateAgentPermission()` runs the
+  guard first — for **every** agent, before any effect-gating logic — denying
+  `action === "edit"` on a protected target with
+  `Permission denied: edit of "<path>" is blocked by target-integrity guard (<reason>).`
+  `protectTargets: false` skips only the guard. Existing specialist
+  (`rea-analyst`/`rea-auditor`/`rea-runtime`) and `runtime` gating untouched.
+- Single hook preserved: `registerAgents()` still calls
+  `ctx.permission.hook("evaluate", …)` exactly once (asserted in test). Removed
+  the `if (!isKnownAgentId(event.agent)) return` early-return so the guard runs
+  for unknown agents too; the `ctx.agent.get` tail-override lookup stays
+  known-agent-only. `src/index.ts` re-exports the two helpers.
+
+Deny coverage (case-sensitive dirs, case-insensitive extensions/names):
+`targets/|fixtures/|captures/|ghidra_projects/|`.rea/` as any path segment;
+any segment ending `.rep`; basename `*.rea.backup*` (contains `.rea.backup`),
+`*.bundle.json`, `.env*` except exact `.env.example`,
+`\.(gpr|idb|i64|hop|rzdb|bndb|apk|ipa|asar|pcap|pcapng|core|dmp|wasm)$`,
+`\.(pem|key|pfx|p12|keystore|jks)$`, `id_rsa*`/`id_ed25519*` prefix.
+
+## M3b.2 — test evidence
+
+```
+$ bun run check   # tsc --noEmit -p tsconfig.json → exit 0
+$ bun test --path-ignore-patterns 'review/**' test/unit/guard.test.ts
+  48 pass, 0 fail
+$ bun test --path-ignore-patterns 'review/**' test/unit test/integration
+  174 pass, 0 fail, 2998 expect() calls, 23 files
+```
+
+`test/unit/guard.test.ts` (48 tests): per-path deny table (each dir, each of
+the 14 binary/capture extensions, `*.rep/`, `*.rea.backup*`, `*.bundle.json`,
+`.env*`, each secret extension, each key prefix) via `evaluateAgentPermission`
+with `agent: "rea"`; singular-`resource` + unknown-agent fail-closed rows;
+non-`edit` action untouched; allows for `src/x.ts`,
+`openspec/changes/a/proposal.md`, `.env.example`; `protectTargets:false` allows
+every denied path; `parseOptions` default/validation; single-hook assertion
+plus live hook-handler deny for an unknown agent.
+`test/unit/options.test.ts` updated for the new `protectTargets: true` default.
+
+## M3b acceptance verdict
+
+- [x] Guard table covers each deny case + the three allows; `protectTargets:false`
+      allows all.
+- [x] `bun run check` and
+      `bun test --path-ignore-patterns 'review/**' test/unit test/integration` pass.

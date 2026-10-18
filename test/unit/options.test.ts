@@ -4,24 +4,26 @@ import plugin from "../../src/index.js"
 
 describe("T04 options boundary: parseOptions", () => {
   test("undefined options yield defaults", () => {
-    expect(parseOptions(undefined)).toEqual({ server: "rea", runtime: "ask" })
+    expect(parseOptions(undefined)).toEqual({ server: "rea", runtime: "ask", protectTargets: true })
   })
 
   test("null options yield defaults", () => {
-    expect(parseOptions(null)).toEqual({ server: "rea", runtime: "ask" })
+    expect(parseOptions(null)).toEqual({ server: "rea", runtime: "ask", protectTargets: true })
   })
 
   test("valid values pass through", () => {
-    expect(parseOptions({ server: "custom", runtime: "allow" })).toEqual({ server: "custom", runtime: "allow" })
-    expect(parseOptions({ runtime: "deny" })).toEqual({ server: "rea", runtime: "deny" })
-    expect(parseOptions({ server: "x" })).toEqual({ server: "x", runtime: "ask" })
-    expect(parseOptions({ codemode: false })).toEqual({ server: "rea", runtime: "ask", codemode: false })
+    expect(parseOptions({ server: "custom", runtime: "allow" })).toEqual({ server: "custom", runtime: "allow", protectTargets: true })
+    expect(parseOptions({ runtime: "deny" })).toEqual({ server: "rea", runtime: "deny", protectTargets: true })
+    expect(parseOptions({ server: "x" })).toEqual({ server: "x", runtime: "ask", protectTargets: true })
+    expect(parseOptions({ codemode: false })).toEqual({ server: "rea", runtime: "ask", codemode: false, protectTargets: true })
     expect(parseOptions({ server: "rea", runtime: "allow", codemode: true })).toEqual({
       server: "rea",
       runtime: "allow",
       codemode: true,
+      protectTargets: true,
     })
-    expect(parseOptions({})).toEqual({ server: "rea", runtime: "ask" })
+    expect(parseOptions({})).toEqual({ server: "rea", runtime: "ask", protectTargets: true })
+    expect(parseOptions({ protectTargets: false })).toEqual({ server: "rea", runtime: "ask", protectTargets: false })
   })
 
   test("unknown key fails with error naming the key", () => {

@@ -4,10 +4,11 @@ export interface ReaOptions {
   readonly server: string
   readonly runtime: RuntimeOption
   readonly codemode?: boolean
+  readonly protectTargets?: boolean
 }
 
 const RUNTIMES: ReadonlyArray<RuntimeOption> = ["ask", "allow", "deny"]
-const KNOWN_KEYS: ReadonlySet<string> = new Set(["server", "runtime", "codemode"])
+const KNOWN_KEYS: ReadonlySet<string> = new Set(["server", "runtime", "codemode", "protectTargets"])
 
 /** Mirror the host MCP namespace derivation (prior-art tool/mcp.ts name()). */
 export function sanitizeServerNamespace(server: string): string {
@@ -15,7 +16,7 @@ export function sanitizeServerNamespace(server: string): string {
 }
 
 export function parseOptions(raw?: unknown): ReaOptions {
-  if (raw === undefined || raw === null) return { server: "rea", runtime: "ask" }
+  if (raw === undefined || raw === null) return { server: "rea", runtime: "ask", protectTargets: true }
   if (typeof raw !== "object" || Array.isArray(raw)) {
     throw new Error(`invalid plugin options: expected an object, got ${Array.isArray(raw) ? "array" : typeof raw}`)
   }
@@ -39,9 +40,13 @@ export function parseOptions(raw?: unknown): ReaOptions {
   if (input.codemode !== undefined && typeof input.codemode !== "boolean") {
     throw new Error(`invalid plugin option "codemode": expected a boolean, got ${typeof input.codemode}`)
   }
+  if (input.protectTargets !== undefined && typeof input.protectTargets !== "boolean") {
+    throw new Error(`invalid plugin option "protectTargets": expected a boolean, got ${typeof input.protectTargets}`)
+  }
   return {
     server: server.trim(),
     runtime: runtime as RuntimeOption,
+    protectTargets: input.protectTargets === undefined ? true : (input.protectTargets as boolean),
     ...(input.codemode === undefined ? {} : { codemode: input.codemode }),
   }
 }
