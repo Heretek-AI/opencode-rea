@@ -1,4 +1,4 @@
-import { WORKFLOWS_STEP_LABEL, formatResults, runBootstrap, type BootstrapOptions, type StepResult } from "./bootstrap.js"
+import { WORKFLOWS_STEP_LABEL, formatResults, reaBootstrapSteps, runBootstrap, type BootstrapOptions, type StepResult } from "./bootstrap.js"
 
 /**
  * M2 native tool: `rea_bootstrap_stack`. Mirrors the Unity kit's
@@ -124,14 +124,20 @@ export async function registerBootstrapTool(ctx: BootstrapToolCtxLike): Promise<
       options: { codemode: false },
       execute: async (input, context) => {
         const args = normalizeInput(input ?? {})
-        await readPermissionAssert(ctx.permission)({
-          sessionID: context.sessionID,
-          agent: context.agent,
-          source: { type: "tool", messageID: context.messageID, id: context.id },
-          action: BOOTSTRAP_PERMISSION_ACTION,
-          resources: [directory],
-          save: ["*"],
-        })
+        // Zero-step calls (all flags false) perform no installs — only a
+        // skill reload below — so they need no approval gate. Any non-zero
+        // install set still requires permission.assert first (fail closed
+        // when the host capability is missing).
+        if (reaBootstrapSteps(directory, args).length > 0) {
+          await readPermissionAssert(ctx.permission)({
+            sessionID: context.sessionID,
+            agent: context.agent,
+            source: { type: "tool", messageID: context.messageID, id: context.id },
+            action: BOOTSTRAP_PERMISSION_ACTION,
+            resources: [directory],
+            save: ["*"],
+          })
+        }
         const results = await runBootstrap(directory, args, {
           signal: context.signal,
           onStep: (label, index, total) => {

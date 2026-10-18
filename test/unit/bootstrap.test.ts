@@ -4,6 +4,7 @@ import {
   reaBootstrapSteps,
   runBootstrap,
   runCommand,
+  workflowsSkipReasonForVersionText,
   type StepResult,
 } from "../../src/bootstrap.js"
 
@@ -86,8 +87,21 @@ describe("M1 unit: REA bootstrap runner", () => {
     expect(out).toContain("[SKIPPED] OpenCode Workflows plugin")
     expect(out).toContain("Failure output:")
     expect(out).toContain("EACCES denied")
-    // Skipped detail is a summary-line reason, not a failure dump.
-    expect(out).not.toContain("opencode CLI not runnable")
+    // Skipped detail rides on the summary line (not the failure dump) so the
+    // skip reason stays visible without failing the run.
+    expect(out).toContain("[SKIPPED] OpenCode Workflows plugin — opencode CLI not runnable")
+  })
+
+  test("workflowsSkipReasonForVersionText allows only the pinned 2.0.15 line (D5)", () => {
+    expect(workflowsSkipReasonForVersionText("opencode v2.0.15")).toBeUndefined()
+    // Known-incompatible 2.0.32 (sandbox rejects effect/unstable/http): skip.
+    const skip32 = workflowsSkipReasonForVersionText("opencode v2.0.32")
+    expect(skip32).toContain("2.0.32")
+    expect(skip32).toContain("2.0.15")
+    // Other parseable versions are unverified too: skip fail-closed.
+    expect(workflowsSkipReasonForVersionText("opencode v2.0.26")).toContain("2.0.15")
+    // Unparseable output still fails closed with a skip reason.
+    expect(workflowsSkipReasonForVersionText("")).toContain("could not determine")
   })
 
   test("formatResults with no failures returns only the summary", () => {

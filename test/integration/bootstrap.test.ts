@@ -160,7 +160,8 @@ describe("M2 integration: rea_bootstrap_stack tool + rea-bootstrap command", () 
       { installSkills: false, installMemory: false, installWorkflows: false },
       callContext(cap),
     )
-    expect(cap.asserted).toHaveLength(1)
+    // Zero-step calls perform no installs, so the approval gate is skipped.
+    expect(cap.asserted).toHaveLength(0)
     expect(res?.metadata?.results).toEqual([])
     expect(typeof res?.content).toBe("string")
     expect(cap.reloaded.count).toBe(1)
@@ -172,8 +173,25 @@ describe("M2 integration: rea_bootstrap_stack tool + rea-bootstrap command", () 
     await registerBootstrapTool(cap.ctx)
     const entry = cap.addedTools.find((tool) => tool.name === BOOTSTRAP_TOOL_NAME)
     expect(entry).toBeDefined()
+    // Default input means installs (non-zero steps), so the missing
+    // capability must still refuse.
     await expect(entry!.execute({}, callContext(cap))).rejects.toThrow(/permission\.assert/)
     expect(cap.reloaded.count).toBe(0)
+  })
+
+  test("zero-step call on a host without permission.assert succeeds (no installs, only skill reload)", async () => {
+    const cap = makeSetupCapture({ deny: false, withAssert: false })
+    await registerBootstrapTool(cap.ctx)
+    const entry = cap.addedTools.find((tool) => tool.name === BOOTSTRAP_TOOL_NAME)
+    expect(entry).toBeDefined()
+    const res = await entry!.execute(
+      { installSkills: false, installMemory: false, installWorkflows: false },
+      callContext(cap),
+    )
+    // No approval gate exists to call, so nothing was asserted.
+    expect(cap.asserted).toHaveLength(0)
+    expect(res?.metadata?.results).toEqual([])
+    expect(cap.reloaded.count).toBe(1)
   })
 
   test("workflows fallback note is appended only when the workflows step did not complete (D5)", () => {

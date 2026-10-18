@@ -40,11 +40,29 @@ export const REA_SKILL_PACKS: ReadonlyArray<{ label: string; repo: string }> = [
 
 /**
  * Synchronous guard for the workflows step. `@rphang/opencode-workflows`
- * upstream pins opencode 2.0.15; only an install + load proves it works on a
- * newer CLI, so this check just verifies an `opencode` CLI is present and
- * reports a parseable version. Anything else fails closed with a skip reason
- * instead of running a doomed install.
+ * upstream pins opencode 2.0.15 (engines + `@opencode/plugin` peer); D5 proves
+ * it fails to load on 2.0.32
+ * (`effect/dist/unstable/http` rejected by the host sandbox) and loads on
+ * 2.0.15. Only an install + load proves it works on another CLI, so any
+ * detected version outside the pinned 2.0.15 line fails closed with a skip
+ * reason instead of running a doomed install. A missing/unparseable probe
+ * also fails closed.
  */
+export function workflowsSkipReasonForVersionText(text: string): string | undefined {
+  const match = /opencode\s+v?(\d+)\.(\d+)\.(\d+)/i.exec(text)
+  if (!match) {
+    return `could not determine opencode version (${JSON.stringify(text.trim().slice(0, 120))}) — skipping @rphang/opencode-workflows install; verify it loads manually (see docs/NOTES.md)`
+  }
+  const version = `${match[1]}.${match[2]}.${match[3]}`
+  if (version === "2.0.15") {
+    return undefined
+  }
+  return (
+    `opencode v${version} is outside the workflows-supported 2.0.15 line (see docs/NOTES.md D5) — ` +
+    `skipping @rphang/opencode-workflows install; bounded fan-out falls back to REA subagent delegation`
+  )
+}
+
 export function workflowsSkipReason(): string | undefined {
   try {
     const windows = process.platform === "win32"
@@ -58,11 +76,7 @@ export function workflowsSkipReason(): string | undefined {
     if (probed.error) {
       return `opencode CLI not runnable (${(probed.error as Error).message}) — skipping @rphang/opencode-workflows install; verify it loads manually (see docs/NOTES.md)`
     }
-    const text = `${probed.stdout ?? ""} ${probed.stderr ?? ""}`
-    if (!/opencode\s+v?\d+\.\d+\.\d+/i.test(text)) {
-      return `could not determine opencode version (${JSON.stringify(text.trim().slice(0, 120))}) — skipping @rphang/opencode-workflows install; verify it loads manually (see docs/NOTES.md)`
-    }
-    return undefined
+    return workflowsSkipReasonForVersionText(`${probed.stdout ?? ""} ${probed.stderr ?? ""}`)
   } catch (error) {
     return `opencode version check failed (${error instanceof Error ? error.message : String(error)}) — skipping @rphang/opencode-workflows install; verify it loads manually (see docs/NOTES.md)`
   }
@@ -173,7 +187,11 @@ export async function runBootstrap(
 
 export function formatResults(results: readonly StepResult[]) {
   const mark = { ok: "OK", failed: "FAILED", skipped: "SKIPPED" } as const
-  const summary = results.map((result) => `[${mark[result.status]}] ${result.label}`).join("\n")
+  const summary = results
+    .map((result) =>
+      result.status === "skipped" ? `[${mark[result.status]}] ${result.label} — ${result.detail}` : `[${mark[result.status]}] ${result.label}`,
+    )
+    .join("\n")
   const failures = results
     .filter((result) => result.status === "failed")
     .map((result) => `--- ${result.label}\n${result.detail}`)

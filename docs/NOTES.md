@@ -696,3 +696,80 @@ Ran 1 test across 1 file. [2.05s]
   would fail otherwise.
 
 No blockers. 3x-fail budget untouched (0 failures this milestone).
+
+---
+
+# Review-fix (opencode-rea PR #5): zero-step approval, skip reasons, workflows guard
+
+Date: 2026-10-18 (UTC). Branch: `claude/project-thread-gnv9zf` (@ 1735ac1,
+in sync with origin). Worktree clean at start (`git status --short` empty).
+All three review findings verified against current code and fixed minimally —
+no new runtime deps, no `ctx.mcp.transform`, no `review/` edits.
+
+## (a) Zero-step calls rejected on hosts without `permission.assert` — VALID, fixed
+
+Evidence: `readPermissionAssert` threw before `runBootstrap` for every call,
+and the pinned host lacks the capability —
+`node_modules/.bin/opencode --version` → `opencode v2.0.26`;
+`grep -c assert node_modules/@opencode/plugin/dist/promise/permission.d.ts` → `0`
+(the type is `Pick<PermissionApi, "list"|"get"|"reply"> & { hook }`; `assert`
+exists only on 2.0.32 per D6). A zero-step call
+(`installSkills/installMemory/installWorkflows: false`) performs no installs —
+only `ctx.skill.reload()` — so refusing it bought no safety.
+Fix (`src/bootstrap-tool.ts` `execute`): compute
+`reaBootstrapSteps(directory, args)` first (import added); skip the
+`readPermissionAssert` gate only when the step list is empty. Any non-zero
+install set still asserts first and still refuses with the `permission.assert`
+message when the capability is missing (fail-closed preserved).
+Tests: existing D6 fail-closed test untouched in behaviour (default input =
+7 steps → still rejects); the approved zero-step test's
+`expect(cap.asserted).toHaveLength(1)` was wrong under the fix (gate is
+skipped, so nothing is asserted) → changed to `0`; new test: zero-step on an
+assert-less host succeeds with `results: []` + one `skill.reload()`.
+
+## (b) `formatResults` hid skipped detail — VALID, fixed
+
+Evidence: summary line was `[SKIPPED] <label>` with no reason, and the unit
+test asserted `expect(out).not.toContain("opencode CLI not runnable")`,
+actively pinning the information loss.
+Fix (`src/bootstrap.ts` `formatResults`): skipped lines now read
+`[SKIPPED] <label> — <detail>`; `[OK]`/`[FAILED]` marks and labels unchanged,
+and the `Failure output:` dump still covers failures only.
+The old `not.toContain` assertion was wrong because an operator triaging a
+skipped workflows step could not see why without digging into raw results —
+changed to `toContain` the reason. `withWorkflowsFallbackNote` untouched
+(still keys off `results[].status`, not the formatted string).
+
+## (c) Version guard treated any parseable version as workflows-compatible — VALID, fixed
+
+Evidence: `workflowsSkipReason` returned `undefined` (do the install) for any
+output matching `/opencode\s+v?\d+\.\d+\.\d+/i`; D5 proves 2.0.32 fails to load
+(`Cannot load effect/dist/unstable/http` sandbox rejection) while only the
+pinned 2.0.15 loads (upstream `engines: { opencode: 2.0.15 }`, no newer plugin
+release). A parseable-but-broken version therefore led straight into a doomed
+install.
+Fix (`src/bootstrap.ts`): extracted pure
+`workflowsSkipReasonForVersionText(text)` — `2.0.15` → `undefined` (proceed);
+any other parseable version → skip reason naming the detected version and the
+supported 2.0.15 line with the D5 fallback pointer; unparseable →
+existing fail-closed reason. `workflowsSkipReason()` keeps the sync `spawnSync`
+probe (no network) and delegates to it. Pure-function shape keeps the new unit
+test (`2.0.15` allow / `2.0.32` + `2.0.26` skip / empty-text skip) free of host
+coupling and `spawnSync` mocks.
+Note: on the pinned 2.0.26 host the workflows step now skips with a reason
+instead of attempting the install — intended fail-closed behaviour; the skip
+surfaces via the (b) summary line plus the existing D5 fallback note, and no
+existing test relied on the old allow path.
+
+## Validation
+
+```
+$ bun run check            # tsc --noEmit -p tsconfig.json → exit 0
+$ bun test --path-ignore-patterns 'review/**' test/unit/bootstrap.test.ts
+  10 pass, 0 fail
+$ bun test --path-ignore-patterns 'review/**' test/unit test/integration
+  176 pass, 0 fail, 3007 expect() calls, 23 files
+```
+
+No `.skip`, no deleted tests. 3x-fail budget: 1 transient failure (stale
+`asserted` length assertion, fixed by updating the expectation) — no blocker.
