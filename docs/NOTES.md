@@ -455,3 +455,51 @@ tools).
       command (fails without the README section).
 - [x] Workflows failure handled non-fatal (D5 note helper + unit-covered;
       step failures never throw out of `runBootstrap`).
+
+---
+
+# M3 — Agent-prompt upgrades discovery log
+
+Date: 2026-10-18 (UTC). Branch: `claude/project-thread-gnv9zf`.
+Worktree: `/home/john/Projects/RE/opencode-rea/.worktrees/m0-spike`.
+Spec: `docs/IMPLEMENTATION_PROMPT.md` §6 M3 + §4.4b (WASM routing rule) + §8.
+
+## M3.1 — `agents/rea.md` edits (prompt only, no code)
+
+Added three short sections after `## Reporting`, consistent with the
+existing observations/inferences/unknowns discipline (no contradiction):
+
+- `## Checkpoint/resume` — before a long/branching step, write a one-line
+  resume capsule (target identity, open Evidence IDs, question in flight) so
+  a cold session can continue; capsule is a pointer, not evidence.
+- `## Challenger branch` — when the leading hypothesis is weakly supported,
+  spin one bounded alternate (one question, one entry point, disconfirming
+  evidence type) before committing; record both in the ledger.
+- `## WASM routing` — `open_binary` refuses WASM
+  (`wasm_requires_static_inspection`); route `.wasm` to
+  `inspect_wasm_artifact` (or `rea inspect-wasm-artifact <path> --format
+  json`), static only, WABT 1.0.42 via `REA_WABT_BIN_DIRECTORY`.
+  Source: `rea/docs/wasm-artifacts.md:7-11`.
+
+Borrowed Goblin-D.M.T. discipline ideas only; no dependency added.
+Frontmatter `description` untouched; no `src/` changes, so
+permission/effects behaviour is unchanged by construction. Body avoids the
+literal `description:` token (keeps the no-frontmatter-leakage test green).
+
+## M3.2 — test evidence
+
+```
+$ bun test --path-ignore-patterns 'review/**' test/unit/agents.test.ts
+  30 pass, 0 fail, 406 expect() calls
+$ bun run check   # tsc --noEmit -p tsconfig.json → exit 0
+$ bun test --path-ignore-patterns 'review/**' test/unit/docs.test.ts
+  6 pass, 0 fail
+```
+
+## M3 acceptance verdict
+
+- [x] `agents.test.ts` still passes (file parses, non-empty `description`
+      frontmatter + body).
+- [x] `rea.md` gains checkpoint/resume + challenger-branch sections and the
+      WASM routing rule.
+- [x] Permission/effects tests unchanged (no `src/` edits).
