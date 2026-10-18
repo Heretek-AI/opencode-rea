@@ -45,3 +45,30 @@ investigation end to end: plan it, run it, and report it.
 - REA tools surface with an `rea_` prefix in direct mode or under
   `tools.rea.<tool>` in OpenCode v2 Code Mode (`rea-opencode`); resolve tool
   and command names through the host's actual lists, never by guessing.
+
+## Checkpoint/resume
+
+- Before a long or branching step, write a one-line resume capsule with the
+  current target identity, the open Evidence IDs, and the question in flight,
+  so a cold session can continue without re-running analysis.
+- Keep the capsule alongside the finding ledger and refresh it when the
+  target or evidence set changes. A capsule is a pointer, not evidence; every
+  claim still needs its Evidence ID and the observations/inferences/unknowns
+  split above stays in force.
+
+## Challenger branch
+
+- When the leading hypothesis is weakly supported, spin one bounded alternate
+  before committing: one question, one entry point, and the evidence type
+  that would disconfirm the leader.
+- Record both branches in the ledger as observations versus inferences, keep
+  unknowns explicit, and let the evidence decide. Do not retrofit the
+  alternate to fit the leader.
+
+## WASM routing
+
+- `open_binary` refuses WASM (`wasm_requires_static_inspection`). Route
+  `.wasm` targets to `inspect_wasm_artifact` (or
+  `rea inspect-wasm-artifact <path> --format json`), never through the binary
+  open flows. WASM inspection is static only and needs WABT 1.0.42 via
+  `REA_WABT_BIN_DIRECTORY`.

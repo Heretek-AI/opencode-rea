@@ -78,7 +78,7 @@ describe("T15 docs guard (README accuracy)", () => {
   test("every command README names exists in src/commands.ts exports", async () => {
     const readme = await Bun.file("README.md").text()
     const commandsSrc = await Bun.file("src/commands.ts").text()
-    for (const id of ["rea", "rea-doctor", "rea-report"]) {
+    for (const id of ["rea", "rea-doctor", "rea-report", "rea-bootstrap"]) {
       expect(readme).toContain(id)
       expect(commandsSrc).toContain(`"${id}"`)
     }
@@ -120,5 +120,26 @@ describe("T15 docs guard (README accuracy)", () => {
     expect(readme).toContain("rea setup --client opencode")
     // Plugin never registers or edits an MCP server.
     expect(readme).toContain("ctx.mcp.transform")
+  })
+
+  test("README documents the rea_bootstrap_stack tool and rea-bootstrap command", async () => {
+    const readme = await Bun.file("README.md").text()
+    for (const token of [
+      "rea_bootstrap_stack",
+      "rea-bootstrap",
+      "installSkills",
+      "installMemory",
+      "installWorkflows",
+    ]) {
+      expect(readme).toContain(token)
+    }
+    const toolSrc = await Bun.file("src/bootstrap-tool.ts").text()
+    expect(toolSrc).toContain("rea_bootstrap_stack")
+    expect(toolSrc).toContain("permission.assert")
+    expect(toolSrc).toContain("ctx.skill.reload")
+    expect(toolSrc).toContain("runBootstrap")
+    expect(toolSrc).toContain("codemode")
+    const commandsSrc = await Bun.file("src/commands.ts").text()
+    expect(commandsSrc).toContain(`"rea-bootstrap"`)
   })
 })

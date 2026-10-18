@@ -157,6 +157,66 @@ function isKnownAgentId(id: string | undefined): id is AgentId {
   return typeof id === "string" && (AGENT_IDS as ReadonlyArray<string>).includes(id)
 }
 
+/**
+ * M3b target-integrity edit guard: paths an agent must never edit because
+ * they are analysis inputs/derivations, captures, or secrets. Fail-closed:
+ * any match denies the edit. `protectTargets: false` disables the guard;
+ * undefined (older callers) means enabled (default true).
+ */
+const PROTECTED_DIR_NAMES: ReadonlySet<string> = new Set([
+  "targets",
+  "fixtures",
+  "captures",
+  "ghidra_projects",
+  ".rea",
+])
+
+const PROTECTED_FILE_EXT_RE = /\.(gpr|idb|i64|hop|rzdb|bndb|apk|ipa|asar|pcap|pcapng|core|dmp|wasm)$/
+const SECRET_FILE_EXT_RE = /\.(pem|key|pfx|p12|keystore|jks)$/
+
+/** Classify why a single edit-target path is protected; undefined means not protected. */
+export function getProtectedTargetReason(rawPath: string): string | undefined {
+  if (typeof rawPath !== "string" || rawPath.length === 0) return undefined
+  const normalized = rawPath.replace(/\\/g, "/")
+  const segments = normalized.split("/").filter((s) => s.length > 0)
+  for (const seg of segments) {
+    if (PROTECTED_DIR_NAMES.has(seg)) return `path under ${seg}/`
+  }
+  for (const seg of segments) {
+    if (seg.toLowerCase().endsWith(".rep")) return `path inside *.rep/`
+  }
+  const base = segments.length > 0 ? (segments[segments.length - 1] as string) : normalized
+  const lowerBase = base.toLowerCase()
+  if (lowerBase.includes(".rea.backup")) return `file matches *.rea.backup*`
+  if (lowerBase.endsWith(".bundle.json")) return `file matches *.bundle.json`
+  if (base.startsWith(".env") && base !== ".env.example") return `file matches .env*`
+  if (PROTECTED_FILE_EXT_RE.test(lowerBase)) return `file matches protected binary/capture extension`
+  if (SECRET_FILE_EXT_RE.test(lowerBase)) return `file matches secret extension`
+  if (lowerBase.startsWith("id_rsa") || lowerBase.startsWith("id_ed25519")) {
+    return `file matches id_rsa*/id_ed25519*`
+  }
+  return undefined
+}
+
+/** True when an edit target must be denied by the target-integrity guard. */
+export function isProtectedTargetPath(rawPath: string): boolean {
+  return getProtectedTargetReason(rawPath) !== undefined
+}
+
+function findProtectedTargetResource(event: PermissionEvaluationEventLike): string | undefined {
+  const candidates: string[] = []
+  if (typeof event.resource === "string" && event.resource.length > 0) candidates.push(event.resource)
+  if (Array.isArray(event.resources)) {
+    for (const r of event.resources) {
+      if (typeof r === "string" && r.length > 0) candidates.push(r)
+    }
+  }
+  for (const c of candidates) {
+    if (isProtectedTargetPath(c)) return c
+  }
+  return undefined
+}
+
 function matchPattern(pattern: string, value: string): boolean {
   if (pattern === "*") return true
   if (!pattern.includes("*")) return value === pattern
@@ -178,6 +238,19 @@ export function evaluateAgentPermission(
   options: ReaOptions,
   tailOverrides?: ReadonlyArray<{ action: string; resource: string; effect: string }>,
 ): { effect: RuntimeOption | "deny" } | undefined {
+  // M3b target-integrity guard: runs for every agent (including unknown ones)
+  // and before any effect-gating logic. Fail closed: a protected edit target
+  // denies with a reason. `protectTargets: false` disables only this guard.
+  if (options.protectTargets !== false && event.action === "edit") {
+    const protectedResource = findProtectedTargetResource(event)
+    if (protectedResource !== undefined) {
+      const reason = getProtectedTargetReason(protectedResource) ?? "protected target"
+      event.effect = "deny"
+      event.message = `Permission denied: edit of "${protectedResource}" is blocked by target-integrity guard (${reason}).`
+      return { effect: "deny" }
+    }
+  }
+
   if (!isKnownAgentId(event.agent)) return undefined
 
   const baselineRules = buildAgentPermissions(event.agent, options)
@@ -288,9 +361,10 @@ export async function registerAgents(ctx: AgentCtxLike, options: ReaOptions): Pr
 
   if (typeof ctx.permission?.hook === "function") {
     await ctx.permission.hook("evaluate", async (event) => {
-      if (!isKnownAgentId(event.agent)) return
+      // No isKnownAgentId early-return: the target-integrity guard inside
+      // evaluateAgentPermission must run for every agent (fail closed).
       let tailOverrides: Array<{ action: string; resource: string; effect: string }> | undefined
-      if (typeof ctx.agent.get === "function") {
+      if (typeof ctx.agent.get === "function" && isKnownAgentId(event.agent)) {
         try {
           const res = (await ctx.agent.get({ agentID: event.agent })) as any
           const data = res?.data ?? res

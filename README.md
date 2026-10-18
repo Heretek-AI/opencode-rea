@@ -15,7 +15,7 @@ into OpenCode — on top of an already-registered REA MCP server.
   `2.0.26`, `rea-agents` `6.5.0`)
 - Plugin id: `rea` (`src/index.ts`: `Plugin.define({ id: "rea", setup ... })`;
   setup parses options, then registers skills, agents, readiness + tool catalog
-  policy, and commands)
+  policy, the bootstrap tool, and commands)
 
 Machine-checkable docs guard: `test/unit/docs.test.ts`
 (build/test rules: `AGENTS.md`).
@@ -143,10 +143,11 @@ Source of truth: `src/commands.ts` (registered via `ctx.command.transform`).
 | `/rea`        | Switch to the `rea` investigator agent and run a staged investigation (`rea-investigation` skill: scope → gather with evidence → infer only from cited evidence). |
 | `/rea-doctor` | Run the REA readiness check by calling the `rea_readiness` tool; report each item and act on the returned remediation. |
 | `/rea-report` | Produce the REA evidence report (observations vs inferences vs unknowns, every claim with its Evidence ID), then delegate a check to the `rea-auditor` agent. |
+| `/rea-bootstrap` | Install the REA reverse-engineering stack by calling the `rea_bootstrap_stack` tool, then call `rea_readiness` to verify; report what installed. |
 
 REA's six MCP prompts surface as host commands under the `rea:<prompt>` namespace
 and are **not** duplicated by this plugin (`COMMAND_IDS` contain no `":"`, so the
-three slash commands never shadow them):
+four slash commands never shadow them):
 
 - `rea:investigate_feature`
 - `rea:compare_application_versions`
@@ -195,6 +196,41 @@ During the same `ctx.tool.transform` pass, `applyReaToolCatalogPolicy`:
   `rea_readiness: server "rea" status "connected", 191 rea_ tool(s) (191 codemode, 0 direct), upstream skill available, version 0.1.0. Remediation: rea doctor --client opencode --json ; rea setup --client opencode --dry-run`.
 
 Use it via `/rea-doctor`, or call `rea_readiness` directly.
+
+## Bootstrap tool: `rea_bootstrap_stack`
+
+Source of truth: `src/bootstrap-tool.ts` (registered via `ctx.tool.transform` as a
+native tool with `codemode: false`, reusing the `src/bootstrap.ts` runner; read-only
+MCP-wise — no writes, no config mutation, never `ctx.mcp.transform`). Use it via
+`/rea-bootstrap`, or call `rea_bootstrap_stack` directly.
+
+`rea_bootstrap_stack` contract:
+
+- Input: `{ installSkills?, installMemory?, installWorkflows? }` (all booleans,
+  all default `true`; `additionalProperties: false`).
+  - `installSkills`: install the four MIT/Apache-2.0 RE skill packs via
+    `npx skills add` (`p4nda0s/reverse-skills`, `ljagiello/ctf-skills`,
+    `cyberkaida/reverse-engineering-assistant`, `rehan-remade/universal-modder`).
+  - `installMemory`: `npm install --global @aerovato/operator-helper` then
+    `operator-helper install opencode-v2`.
+  - `installWorkflows`: `opencode plugin add @rphang/opencode-workflows`
+    (guarded by a version-probe `skip`).
+- Permission: `execute` calls `ctx.permission.assert({ ... action:
+  "rea_bootstrap_stack", resources: [directory], save: ["*"] })` **before**
+  running anything, so installs ask the user first. Hosts that predate
+  `permission.assert` (observed: `@opencode/cli` 2.0.26) make the tool refuse
+  with a descriptive error instead of running unapproved installs; hosts with
+  the capability (observed: 2.0.32) gate normally.
+- Progress: each step is reported through the tool context's `progress`.
+- Output: `{ content, metadata: { results } }` where `content` is the formatted
+  per-step `[OK]` / `[FAILED]` / `[SKIPPED]` summary (plus a `Failure output:`
+  section when steps fail) and `metadata.results` is the raw `StepResult[]`.
+- Workflows failure is non-fatal: if the `OpenCode Workflows plugin` step does
+  not complete, the bootstrap still finishes and the content notes that bounded
+  fan-out falls back to REA's own subagent delegation (that plugin fails to
+  load on newer CLIs; see `docs/NOTES.md` D5).
+- After the run, the tool calls `ctx.skill.reload()` so newly installed skills
+  are visible without a restart.
 
 ## What this plugin deliberately does NOT do
 
